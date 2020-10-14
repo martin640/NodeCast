@@ -10,6 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "websocket": "^1.0.32"
+    "websocket": "^1.0.32",
+    "music-metadata": "^7.4.0"
   }
 }
