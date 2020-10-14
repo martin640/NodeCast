@@ -25,6 +25,7 @@ module.exports = class {
         });*/
         this.playerProcess.stdin.setEncoding('utf-8');
         this.playing = true;
+        this.cachedPosition = 0;
         this.startedTime = Date.now();
 
         let self = this;

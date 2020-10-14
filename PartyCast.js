@@ -65,11 +65,12 @@ const LobbyMember = class {
 }
 
 const LibraryItem = class {
-    constructor(id, artwork, title, artist, album, file, provider) {
+    constructor(id, artwork, title, artist, album, length, file, provider) {
         this.id = id;
         this.artwork = artwork;
         this.title = title;
         this.artist = artist;
+        this.length = length;
         this.album = album;
         this.path = file;
         this.provider = provider;
@@ -115,7 +116,7 @@ const LibraryProvider = class {
                         }
 
                         self.items.push(new LibraryItem(++self.idPool, file + ".jpg",
-                            metadata.common.title, metadata.common.artist, metadata.common.album,
+                            metadata.common.title, metadata.common.artist, metadata.common.album, metadata.format.duration * 1000,
                             absPath, self));
                         resolve();
                     }).catch(err => {
@@ -160,7 +161,7 @@ const QueueItem = class {
                 title: this.libraryItem.title,
                 artist: this.libraryItem.artist,
                 artwork: artwork,
-                length: 360000,
+                length: this.libraryItem.length,
                 start: this.start,
                 lastKnownProgress: this.queue.looper.player.getPosition()
             }
