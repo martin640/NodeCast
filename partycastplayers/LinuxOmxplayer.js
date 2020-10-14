@@ -1,6 +1,9 @@
 const { spawn, exec } = require('child_process');
 const path = require("path");
 
+/**
+ * This is default music player used on Linux-based systems. Requires package 'omxplayer'.
+ */
 module.exports = class {
     constructor(volume) {
         this.volume = volume;
