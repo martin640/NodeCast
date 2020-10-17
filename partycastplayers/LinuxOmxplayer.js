@@ -10,6 +10,7 @@ module.exports = class {
 
         this.playerProcess = undefined;
         this.playing = false;
+        this.killed = false;
         this.cachedPosition = 0;
         this.startedTime = 0;
     }
@@ -30,8 +31,10 @@ module.exports = class {
 
         let self = this;
         this.playerProcess.on('close', (code) => {
-            self.playing = false;
-            endCallback();
+            if (!self.killed) { // avoid firing callback when killed manually
+                self.playing = false;
+                endCallback();
+            } else self.killed = false;
         });
     }
     pause() {
@@ -49,8 +52,10 @@ module.exports = class {
         }
     }
     kill() {
-        if (this.playing) {
-            this.playerProcess.kill();
+        if (typeof this.playerProcess !== 'undefined') {
+            this.killed = true;
+            this.playerProcess.stdin.write("q");
+            this.playerProcess.stdin.pause();
             this.playerProcess = undefined;
             this.playing = false;
             this.cachedPosition = 0;

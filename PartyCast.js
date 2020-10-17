@@ -84,7 +84,7 @@ const LibraryItem = class {
                 title: this.title,
                 artist: this.artist,
                 album: this.album,
-                imageUrl: this.artwork ? `http://[HOST]:${this.provider.context.port}/art/${this.id}` : null,
+                imageUrl: this.artwork ? `http://[HOST]:${this.provider.context.port}/art/${this.artwork}` : null,
             }
         }
     }
@@ -152,7 +152,7 @@ const QueueItem = class {
     }
 
     toJson() {
-        let artwork = this.libraryItem.artwork ? `http://[HOST]:${this.queue.looper.context.port}/art/${this.libraryItem.id}` : null;
+        let artwork = this.libraryItem.artwork ? `http://[HOST]:${this.queue.looper.context.port}/art/${this.libraryItem.artwork}` : null;
         return {
             class: "RemoteMedia",
             values: {
@@ -162,8 +162,7 @@ const QueueItem = class {
                 artist: this.libraryItem.artist,
                 artwork: artwork,
                 length: this.libraryItem.length,
-                start: this.start,
-                lastKnownProgress: this.queue.looper.player.getPosition()
+                progress: this.queue.looper.player.getPosition()
             }
         }
     }
@@ -299,6 +298,8 @@ const QueueLooper = class {
         nextSong.start = Date.now();
         cq.playingIndex = nextSong.id;
 
+        console.log(`${new Date()} Now playing: ${nextSong.libraryItem.artist} - ${nextSong.libraryItem.title}`);
+
         this._broadcastLobbyUpdate();
     }
 
@@ -353,8 +354,10 @@ const ServerLobby = class {
         this.selfMember = new LobbyMember(username, ++this.memberIdPool, PERMISSION_HOST, "Server", null, this);
         this.members.push(this.selfMember);
 
+        console.log(`${new Date()} Rebuilding library...`);
         this.libraryProvider = new LibraryProvider("./music", this);
         this.libraryProvider.reload().then(function (res) {
+            console.log(`${new Date()} Library has been loaded (total ${res.items.length} songs found)`);
             thisLobby._broadcastEvent("Event.LIBRARY_UPDATED", res);
             for (let i = 0; i < thisLobby.listenersUnsafe.length; i++) {
                 try {
@@ -372,26 +375,22 @@ const ServerLobby = class {
 
             let q = request.url;
             if (q.startsWith("/art/")) {
-                let id = Number(q.substring(5));
+                let id = decodeURIComponent(q.substring(5));
 
                 let libraryItems = thisLobby.libraryProvider.items;
                 for (let i = 0; i < libraryItems.length; i++) {
                     let item = libraryItems[i];
-                    if (item.id === id) {
+                    if (item.artwork === id) {
                         fs.readFile(".artwork_cache/" + item.artwork, function(error, content) {
                             if (error) {
-                                if(error.code === 'ENOENT'){
-                                    fs.readFile('./404.html', function(error, content) {
-                                        response.writeHead(200, { 'Content-Type': contentType });
-                                        response.end(content, 'utf-8');
-                                    });
+                                if (error.code === 'ENOENT') {
+                                    response.writeHead(404, { 'Content-Type': "text/plain" });
+                                    response.end('File not found', 'utf-8');
                                 } else {
-                                    response.writeHead(500);
-                                    response.end('Sorry, check with the site admin for error: '+error.code+' ..\n');
-                                    response.end();
+                                    response.writeHead(500, { 'Content-Type': "text/plain" });
+                                    response.end('Sorry, check with the site admin for error: ' + error.code, 'utf-8');
                                 }
-                            }
-                            else {
+                            } else {
                                 response.writeHead(200, { 'Content-Type': "image/jpeg" });
                                 response.end(content, 'utf-8');
                             }
@@ -405,31 +404,6 @@ const ServerLobby = class {
                 response.end("Resource not found");
                 return;
             }
-            /*if (q.startsWith("/art/")) {
-                String id = q.substring(5);
-                int idi = Integer.parseInt(id);
-                LocalLibraryItem item = (LocalLibraryItem) findItemById(idi);
-                if (item != null && item.uri != null) {
-                    File imageFile = new File(item.uri.toString());
-                    if (!imageFile.exists())
-                        return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Failed to fetch artwork: File doesn't exist");
-
-                    try (FileInputStream fis = new FileInputStream(imageFile)) {
-                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                        byte[] buffer = new byte[2048];
-                        int read;
-                        while ((read = fis.read(buffer)) > 0) {
-                            baos.write(buffer, 0, read);
-                        }
-
-                        return newFixedLengthResponse(Response.Status.OK, "image/jpeg",
-                            new ByteArrayInputStream(baos.toByteArray()), baos.size());
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                        return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Failed to fetch artwork: IOException");
-                    }
-                } else return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Failed to fetch artwork: No such resource");
-            }*/
 
             response.writeHead(204);
             response.end();
@@ -454,9 +428,14 @@ const ServerLobby = class {
                 connection.close(1003, "Invalid name provided");
                 return;
             }
+            clientUsername = clientUsername.split("\n").join(" ");
+            clientUsername = clientUsername.substr(0, 25);
 
+            // todo: change permissions back to default
+            // PERMISSIONS_MOD is recommended for debugging,
+            // however you should change it back to PERMISSIONS_DEFAULT on production server
             let clientMember = new LobbyMember(clientUsername, ++thisLobby.memberIdPool,
-                PERMISSIONS_DEFAULT, clientAgent, connection, thisLobby);
+                PERMISSIONS_MOD, clientAgent, connection, thisLobby);
 
             console.log(`${new Date()} New user with nick \"${clientUsername}\" has been registered with id ${clientMember.id}`);
 

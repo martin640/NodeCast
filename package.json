@@ -1,14 +1,17 @@
 {
   "name": "nodecast",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "NodeJS server for PartyCast",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
+  "repository": {
+    "url": "https://github.com/martin640/NodeCast"
+  },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "GPL-3.0-only",
   "dependencies": {
     "websocket": "^1.0.32",
     "music-metadata": "^7.4.0"

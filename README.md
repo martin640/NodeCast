@@ -10,7 +10,7 @@ In order to run project "as is" without modifications, you will need:
   4. Create `music` folder and put your music there
   5. Run `npm start`
 
-Alternatively create your own music player controller by following <a href="partycastplayers/PlayerTemplate.js">partycastplayers/PlayerTemplate.js</a> and changing index.js server initialization
+Alternatively create your own music player controller by following <a href="partycastplayers/PlayerTemplate.js">partycastplayers/PlayerTemplate.js</a> and changing index.js constant
 ```
-const lobby = new ServerLobby(SERVER_PARTY_TITLE, SERVER_PORT, SERVER_USERNAME, /* YOUR MUSIC PLAYER CONTROLLER CONSTRUCTOR */, {
+const SERVER_MUSIC_PLAYER_CONTROLLER = new YourMusicController();
 ```
