@@ -2,7 +2,9 @@ const WebSocketServer = require('websocket').server;
 const http = require('http');
 const fs = require('fs');
 const mm = require('music-metadata');
+const path = require("path");
 
+/* @deprecated */
 const PERMISSION_CHANGE_NAME = 1;
 const PERMISSION_QUEUE = 2;
 const PERMISSION_MEMBER_LIST = 4;
@@ -22,6 +24,28 @@ const STATE_CLOSED = 3;
 const PLAYBACK_READY = 0;
 const PLAYBACK_PLAYING = 1;
 const PLAYBACK_PAUSED = 2;
+/* @deprecated */
+
+const Permissions = {
+    PERMISSION_CHANGE_NAME: 1,
+    PERMISSION_QUEUE: 2,
+    PERMISSION_MEMBER_LIST: 4,
+    PERMISSION_MANAGE_USERS: 8,
+    PERMISSION_MANAGE_QUEUE: 16,
+    PERMISSION_OWNER: 64,
+    PERMISSION_HOST: 0b111111111111111111111111111111
+}
+const LobbyState = {
+    STATE_CREATED: 0,
+    STATE_CONNECTING: 1,
+    STATE_OPEN: 2,
+    STATE_CLOSED: 3
+}
+const PlaybackState = {
+    PLAYBACK_READY: 0,
+    PLAYBACK_PLAYING: 1,
+    PLAYBACK_PAUSED: 2
+}
 
 function serialize(obj) {
     if (typeof obj.toJson === "function") return obj.toJson();
@@ -35,6 +59,18 @@ function serializeArray(arr) {
     }
     return ret;
 }
+function compactTime() {
+    return (new Date()).toLocaleDateString(undefined,
+        {
+            year: 'numeric', month: 'numeric', day: 'numeric',
+            hour: 'numeric', minute: '2-digit', second: '2-digit'
+        });
+}
+Number.prototype.roundDecimal = function (precision) {
+    let e = Math.pow(10, precision);
+    return Math.round((this + Number.EPSILON) * e) / e;
+}
+
 
 const LobbyMember = class {
     constructor(name, id, permissions, agent, connection, lobby) {
@@ -105,13 +141,14 @@ const LibraryProvider = class {
             let pendingPromises = [];
             fs.readdirSync(self.location).forEach(file => {
                 let absPath = self.location + "/" + file;
-                fs.mkdirSync(".artwork_cache", { recursive: true })
+                fs.mkdirSync(self.context.artworkCacheLocation, { recursive: true })
                 pendingPromises.push(new Promise(function (resolve, reject) {
                     mm.parseFile(absPath).then(metadata => {
                         if (Array.isArray(metadata.common.picture) && metadata.common.picture.length > 0) {
-                            if (!fs.existsSync(".artwork_cache/" + file + ".jpg")) {
+                            let cacheLoc = self.context.resolveArtwork(file + ".jpg");
+                            if (!fs.existsSync(cacheLoc)) {
                                 let picture = metadata.common.picture[0];
-                                fs.writeFile(".artwork_cache/" + file + ".jpg", picture.data, "binary", function(err) { });
+                                fs.writeFile(cacheLoc, picture.data, "binary", function(err) { });
                             }
                         }
 
@@ -126,6 +163,8 @@ const LibraryProvider = class {
             });
 
             Promise.allSettled(pendingPromises).then(function (res) {
+                self.items = self.items.filter(x => x.title);
+                self.items.sort((a, b) => a.title.localeCompare(b.title));
                 resolve(self);
             });
         });
@@ -178,6 +217,10 @@ const Queue = class {
 
     get playing() {
         return this.items[this.playingIndex];
+    }
+
+    get next() {
+        return this.items[this.playingIndex+1];
     }
 
     toJson() {
@@ -307,6 +350,29 @@ const QueueLooper = class {
         return this.rounds[this.currentQueuePos];
     }
 
+    get nowPlaying() {
+        let q = this.currentQueue;
+        if (q) {
+            let ref = q.playing;
+            if (ref) {
+                return ref;
+            }
+        }
+        return false;
+    }
+    get upNext() {
+        let q = this.rounds[this.currentQueuePos];
+        if (q) {
+            let ref = q.next;
+            if (ref) {
+                return ref;
+            } else {
+                q = this.rounds[this.currentQueuePos+1];
+                return q.next;
+            }
+        } else return false;
+    }
+
     _broadcastLobbyUpdate() {
         this.context._broadcastEvent("Event.LOBBY_UPDATED", this.context);
         for (let i = 0; i < this.context.listenersUnsafe.length; i++) {
@@ -337,27 +403,41 @@ const QueueLooper = class {
 }
 
 const ServerLobby = class {
-    constructor(title, port, username, player, listener) {
+    constructor(config) {
         let thisLobby = this;
 
-        this.title = title;
-        this.port = port;
+        this.title = config.title || "Nodecast Server";
+        this.port = config.port || 10784;
+        this.libraryLocation = config.libraryLocation || "./music";
+        this.artworkCacheLocation = path.resolve(config.artworkCacheLocation || "./.artwork_cache");
+        this.config = config;
 
         this.members = [];
         this.memberCacheByIP = {};
         this.listenersUnsafe = [];
-        this.listenersUnsafe.push(listener);
+        if (typeof config.listener !== "undefined") {
+            this.listenersUnsafe.push(config.listener);
+        }
+        config.player.prepare(this);
         this.playbackState = PLAYBACK_READY;
 
         this.memberIdPool = 0;
 
-        this.selfMember = new LobbyMember(username, ++this.memberIdPool, PERMISSION_HOST, "Server", null, this);
+        this.selfMember = new LobbyMember(config.username || "Host", ++this.memberIdPool, PERMISSION_HOST, "Server", null, this);
         this.members.push(this.selfMember);
 
-        console.log(`${new Date()} Rebuilding library...`);
-        this.libraryProvider = new LibraryProvider("./music", this);
+        console.log(`[PartyCast @ ${compactTime()}] Rebuilding library... This might take a while`);
+
+        this.libraryProvider = new LibraryProvider(this.libraryLocation, this);
+        let buildStart = Date.now();
         this.libraryProvider.reload().then(function (res) {
-            console.log(`${new Date()} Library has been loaded (total ${res.items.length} songs found)`);
+
+            let buildTime = (Date.now() - buildStart) / 1000;
+            let songsCount = res.items.length;
+            let buildSpeed = songsCount / buildTime;
+            console.log(`[PartyCast @ ${compactTime()}] Library has been loaded successfully in ${buildTime.roundDecimal(2)} s`);
+            console.log(`[PartyCast @ ${compactTime()}] Library contains ${songsCount} songs (average scan speed: ${buildSpeed.roundDecimal(1)} songs/s)`);
+
             thisLobby._broadcastEvent("Event.LIBRARY_UPDATED", res);
             for (let i = 0; i < thisLobby.listenersUnsafe.length; i++) {
                 try {
@@ -365,13 +445,13 @@ const ServerLobby = class {
                 } catch (e) { }
             }
         }).catch(function (err) {
-            console.warn("Failed to reload library:" + err);
+            console.warn(`[PartyCast @ ${compactTime()}] Failed to reload library: ${err}`);
         });
 
-        this.looper = new QueueLooper(player, this);
+        this.looper = new QueueLooper(config.player, this);
 
         this.httpServer = http.createServer(function(request, response) {
-            response.setHeader("PartyCast-Lobby-Name", title);
+            response.setHeader("PartyCast-Lobby-Name", thisLobby.title);
 
             let q = request.url;
             if (q.startsWith("/art/")) {
@@ -381,7 +461,8 @@ const ServerLobby = class {
                 for (let i = 0; i < libraryItems.length; i++) {
                     let item = libraryItems[i];
                     if (item.artwork === id) {
-                        fs.readFile(".artwork_cache/" + item.artwork, function(error, content) {
+                        let artworkPath = thisLobby.resolveArtwork(item.artwork);
+                        fs.readFile(artworkPath, function(error, content) {
                             if (error) {
                                 if (error.code === 'ENOENT') {
                                     response.writeHead(404, { 'Content-Type': "text/plain" });
@@ -408,8 +489,14 @@ const ServerLobby = class {
             response.writeHead(204);
             response.end();
         });
-        this.httpServer.listen(port, function() {
-            console.log((new Date()) + ' Server is listening on port ' + port);
+        this.httpServer.listen(this.port, function() {
+            console.log(`[PartyCast @ ${compactTime()}] HTTP server started on port ${thisLobby.port}`);
+
+            for (let i = 0; i < thisLobby.listenersUnsafe.length; i++) {
+                try {
+                    thisLobby.listenersUnsafe[i].onConnected(thisLobby);
+                } catch (e) { }
+            }
         });
 
         this.wsServer = new WebSocketServer({
@@ -437,7 +524,7 @@ const ServerLobby = class {
             let clientMember = new LobbyMember(clientUsername, ++thisLobby.memberIdPool,
                 PERMISSIONS_MOD, clientAgent, connection, thisLobby);
 
-            console.log(`${new Date()} New user with nick \"${clientUsername}\" has been registered with id ${clientMember.id}`);
+            console.log(`[PartyCast @ ${compactTime()}] User \"${clientUsername}\"@${connection.remoteAddress} connected; assigned ID ${clientMember.id}`);
 
             // acknowledge existing users before pushing new member to list
             thisLobby._broadcastEvent("Event.USER_JOINED", clientMember);
@@ -458,7 +545,7 @@ const ServerLobby = class {
                 }
             });
             connection.on('close', function(reasonCode, description) {
-                console.log(`${new Date()} User \"${clientUsername}\"@${connection.remoteAddress} has been disconnected`);
+                console.log(`[PartyCast @ ${compactTime()}] User \"${clientUsername}\"@${connection.remoteAddress} has disconnected: [code ${reasonCode}] ${description}`);
 
                 if (clientMember) {
                     thisLobby.members = thisLobby.members.filter(function(el) { return el !== clientMember; });
@@ -494,6 +581,7 @@ const ServerLobby = class {
                         }
                     }
                 } else {
+                    console.warn(`[PartyCast @ ${compactTime()}] User update requested by \"${clientMember.name}\" has been rejected`);
                     connection.sendUTF(JSON.stringify({
                         id: mid,
                         type: "LobbyCtl.RESPONSE",
@@ -504,21 +592,14 @@ const ServerLobby = class {
             } else if (eventType === 'LobbyCtl.ENQUEUE' && clientMember.checkPermission(PERMISSION_QUEUE)) {
                 let data = messageData.value;
                 let id = data.id;
-                let item = false;
-
-                let libraryItems = this.libraryProvider.items;
-                for (let i = 0; i < libraryItems.length; i++) {
-                    let a = libraryItems[i];
-                    if (a.id === id) {
-                        item = a;
-                        break;
-                    }
-                }
-
-                if (item) {
-                    this.looper.enqueue(new QueueItem(clientMember, item));
+                if (this._enqueueById(clientMember, id)) {
+                    connection.sendUTF(JSON.stringify({
+                        id: mid,
+                        type: "LobbyCtl.RESPONSE",
+                        status: 0,
+                        message: "OK"
+                    }));
                 } else {
-                    console.warn("Item \"" + clientMember.name + "\" tried to enqueue was not found");
                     connection.sendUTF(JSON.stringify({
                         id: mid,
                         type: "LobbyCtl.RESPONSE",
@@ -533,10 +614,10 @@ const ServerLobby = class {
             } else if (eventType === 'LobbyCtl.PLAYBACK_SKIP' && clientMember.checkPermission(PERMISSION_MANAGE_QUEUE)) {
                 this.looper.skip();
             } else {
-                console.warn("Unhandled message from " + clientMember.name);
+                console.warn(`[PartyCast @ ${compactTime()}] Unhandled message from ${clientMember.name}`);
             }
         } catch (e) {
-            console.log(e);
+            console.error(`[PartyCast @ ${compactTime()}] Error thrown while trying to handle message: ${e}`);
             connection.sendUTF(JSON.stringify({
                 "type": "Connection.ERROR",
                 "data": "Failed to handle message received because error was thrown",
@@ -597,9 +678,34 @@ const ServerLobby = class {
                     "clientId": member.id
                 }));
             } catch (e) {
-                console.error(e);
+                console.error(`[PartyCast] Error thrown while trying to send event data to client: ${e}`);
             }
         }
+    }
+
+    _enqueueById(clientMember, id) {
+        let item = false;
+
+        let libraryItems = this.libraryProvider.items;
+        for (let i = 0; i < libraryItems.length; i++) {
+            let a = libraryItems[i];
+            if (a.id === id) {
+                item = a;
+                break;
+            }
+        }
+
+        if (item) {
+            this.looper.enqueue(new QueueItem(clientMember, item));
+            return true;
+        } else {
+            return false;
+            console.warn(`[PartyCast @ ${compactTime()}] Enqueue item failed: ${id} not found [originated from \"${clientMember.name}\"]`);
+        }
+    }
+
+    resolveArtwork(artworkUri) {
+        return path.resolve(`${this.artworkCacheLocation}/${artworkUri}`);
     }
 
     toJson() {
@@ -617,5 +723,9 @@ const ServerLobby = class {
     }
 };
 
+module.exports.compactTime = compactTime;
 module.exports.LobbyMember = LobbyMember;
 module.exports.ServerLobby = ServerLobby;
+module.exports.Permissions = Permissions;
+module.exports.LobbyState = LobbyState;
+module.exports.PlaybackState = PlaybackState;

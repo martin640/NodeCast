@@ -1,10 +1,11 @@
 const { spawn, exec } = require('child_process');
+const { lookpath } = require('lookpath');
 const path = require("path");
 
 /**
  * This is default music player used on Linux-based systems. Requires package 'omxplayer'.
  */
-module.exports = class {
+module.exports = class LinuxOmxplayer {
     constructor(volume) {
         this.volume = volume;
 
@@ -14,6 +15,18 @@ module.exports = class {
         this.cachedPosition = 0;
         this.startedTime = 0;
     }
+
+    checkAvailable() {
+        let self = this;
+        return new Promise(((resolve, reject) => {
+            lookpath('omxplayer').then((res) => {
+                if (res) resolve(self);
+                else reject("Command not found");
+            });
+        }));
+    }
+
+    prepare(lobby) { }
 
     play(file, endCallback) {
         let absolutePath = path.resolve(file);

@@ -3,9 +3,18 @@
  * Constructor is not called by internal functions so it can contain custom arguments.
  * For example, default LinuxOmxplayer.js requires volume as argument, which is then passed to called processes.
  */
-module.exports = class {
+module.exports = class PlayerTemplate {
     constructor() {
         this.playing = false;
+    }
+
+    checkAvailable() {
+        // check if music player is available on current platform
+        return Promise.reject("Not implemented");
+    }
+
+    prepare(lobby) {
+        // attach lobby if player requires to interact with lobby
     }
 
     play(file, endCallback) {

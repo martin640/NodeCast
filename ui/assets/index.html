@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>Nodecast Server</title>
+        <meta charset="UTF-8">
+        <link href="index.css" rel="stylesheet" type="text/css">
+        <script src="index.js" defer></script>
+    </head>
+    <body>
+        <div class="root-wrapper">
+            <div class="panel-left">
+                <h3 id="app-server-title"></h3>
+                <div id="app-server-members-list">
+                    <small class="heading">Connected users:</small>
+                </div>
+            </div>
+            <div class="content-middle" id="app-library-list"></div>
+            <div class="panel-bottom">
+                <div class="now-playing-progressbar">
+                    <div class="now-playing-progressbar-value"></div>
+                </div>
+                <div class="now-playing">
+                    <div class="now-playing-left">
+                        <img id="now-playing-image" src="error.svg" alt="Now Playing artwork">
+                    </div>
+                    <div class="now-playing-right center-vertically">
+                        <h4 id="now-playing-title"></h4>
+                        <span id="now-playing-artist"></span>
+                    </div>
+                </div>
+                <div class="now-playing-controls">
+                    <div id="now-playing-control-play" class="center-grid now-playing-control-item">
+                        <svg style="width:24px;height:24px" viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M8,5.14V19.14L19,12.14L8,5.14Z" />
+                        </svg>
+                    </div>
+                    <div id="now-playing-control-skip" class="center-grid now-playing-control-item">
+                        <svg style="width:24px;height:24px" viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M16,18H18V6H16M6,18L14.5,12L6,6V18Z" />
+                        </svg>
+                    </div>
+                </div>
+                <div class="now-playing-up-next" style="opacity: 0;">
+                    <div class="up-next-left center-vertically">
+                        <small style="font-size: 0.8em; opacity: 0.5">Up next:</small>
+                        <h4 id="up-next-title"></h4>
+                        <span id="up-next-artist"></span>
+                    </div>
+                    <div class="up-next-right">
+                        <img id="up-next-image" src="error.svg" alt="Next up artwork">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
