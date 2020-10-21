@@ -19,7 +19,7 @@ function createWindow() {
     window.removeMenu();
 
     window.loadFile('assets/index.html');
-    //window.webContents.openDevTools();
+    window.webContents.openDevTools();
 }
 
 app.whenReady().then(createWindow);

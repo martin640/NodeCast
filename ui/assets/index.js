@@ -171,6 +171,7 @@ let config = {
                 newItem.appendChild(newItemArtwork);
 
                 let newItemInfo = document.createElement("div");
+                newItemInfo.className = "center-vertically";
                 newItemInfo.appendChild(document.createTextNode(libraryItemRow.title));
                 newItemInfo.appendChild(document.createElement("br"));
                 newItemInfo.appendChild(document.createTextNode(libraryItemRow.artist));
