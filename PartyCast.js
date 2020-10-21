@@ -368,7 +368,8 @@ const QueueLooper = class {
                 return ref;
             } else {
                 q = this.rounds[this.currentQueuePos+1];
-                return q.next;
+                if (q) return q.next;
+                else return false;
             }
         } else return false;
     }
