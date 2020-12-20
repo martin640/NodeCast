@@ -10,10 +10,11 @@ In order to run project "as is" without modifications, you will need:
 4. Create `music` folder and put your music there
 5. Run `npm install` and `npm start`
 
-Alternatively create your own music player controller by following <a href="partycastplayers/PlayerTemplate.js">partycastplayers/PlayerTemplate.js</a> and changing index.js constant
+Alternatively create your own music player controller by following <a href="partycastplayers/PlayerTemplate.js">partycastplayers/PlayerTemplate.js</a> and changing main.js constant
 ```
 const SERVER_MUSIC_PLAYER_CONTROLLER = new YourMusicController();
 ```
 
 Windows users can use Electron-based UI with built-in music controller:
-1. Run `npm install` and `npm run start-ui`
+1. Rename `partycast.example.json` to `partycast.json` and change according to your needs
+2. Run `npm install` and `npm run start-ui`

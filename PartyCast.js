@@ -1,6 +1,7 @@
 const WebSocketServer = require('websocket').server;
 const http = require('http');
 const fs = require('fs');
+const dgram = require('dgram');
 const mm = require('music-metadata');
 const path = require("path");
 
@@ -407,12 +408,14 @@ const ServerLobby = class {
     constructor(config) {
         let thisLobby = this;
 
+        // lobby configuration
         this.title = config.title || "Nodecast Server";
         this.port = config.port || 10784;
         this.libraryLocation = config.libraryLocation || "./music";
         this.artworkCacheLocation = path.resolve(config.artworkCacheLocation || "./.artwork_cache");
         this.config = config;
 
+        // lobby variables
         this.members = [];
         this.memberCacheByIP = {};
         this.listenersUnsafe = [];
@@ -421,7 +424,6 @@ const ServerLobby = class {
         }
         config.player.prepare(this);
         this.playbackState = PLAYBACK_READY;
-
         this.memberIdPool = 0;
 
         this.selfMember = new LobbyMember(config.username || "Host", ++this.memberIdPool, PERMISSION_HOST, "Server", null, this);
@@ -451,6 +453,7 @@ const ServerLobby = class {
 
         this.looper = new QueueLooper(config.player, this);
 
+        // lobby http server
         this.httpServer = http.createServer(function(request, response) {
             response.setHeader("PartyCast-Lobby-Name", thisLobby.title);
 
@@ -500,6 +503,7 @@ const ServerLobby = class {
             }
         });
 
+        // lobby websocket server
         this.wsServer = new WebSocketServer({
             httpServer: this.httpServer,
             autoAcceptConnections: false
@@ -560,6 +564,19 @@ const ServerLobby = class {
                 }
             });
         });
+
+        // lobby udp multicast client
+        let udpSocket = (this.udpSocket = dgram.createSocket('udp4'));
+        this.udpSocket.on('listening', function () {
+            console.log(`[PartyCast @ ${compactTime()}] UDP multicast client started on port ${thisLobby.port}`);
+            udpSocket.setBroadcast(true)
+            udpSocket.setMulticastTTL(128);
+            udpSocket.addMembership('224.1.1.1');
+        });
+        this.udpSocket.on('message', function (message, remote) {
+            udpSocket.send(thisLobby.title, 0, thisLobby.title.length, remote.port, remote.address);
+        });
+        this.udpSocket.bind(this.port);
     }
 
     _handleMessage(clientMember, connection, message) {

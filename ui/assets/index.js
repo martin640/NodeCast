@@ -1,11 +1,14 @@
 const { ServerLobby, compactTime, PlaybackState } = require("../../PartyCast")
+const DiscordRPC = require('discord-rpc')
+const packageInfo = require('../../package.json')
+const configJson = require('../../partycast.json') || {}
+const fallbackConfig = configJson.disable_example_as_fallback ? {} : (require('../../partycast.example.json') || {})
+
+const clientId = '790227124597948436'
+DiscordRPC.register(clientId)
+const rpc = new DiscordRPC.Client({ transport: 'ipc' })
 
 console.log(`[${compactTime()}] Initializing Nodecast with UI...`);
-
-// config vars
-const SERVER_PORT = "10784";
-const SERVER_PARTY_TITLE = "Nodecast " + process.env.npm_package_version;
-const SERVER_USERNAME = "Nodecast";
 
 let controller = {
     name: "ElectronDocumentController",
@@ -68,8 +71,15 @@ function updateNowPlaying(lobby, looper) {
 
     if (lobby.playbackState === PlaybackState.PLAYBACK_READY) {
         nowPlayingArtwork.src = nowPlayingTitle.innerText = nowPlayingArtist.innerText = '';
+
+        rpc.setActivity({
+            largeImageKey: 'idle',
+            largeImageText: 'Idle',
+            instance: false,
+        })
     } else {
-        if (lobby.playbackState === PlaybackState.PLAYBACK_PLAYING) {
+        const isPlaying = lobby.playbackState === PlaybackState.PLAYBACK_PLAYING
+        if (isPlaying) {
             nowPlayingControlPlay.querySelector("path").setAttribute("d","M14,19H18V5H14M6,19H10V5H6V19Z");
             nowPlayingControlPlay.onclick = function () {
                 lobby.looper.pause();
@@ -86,6 +96,17 @@ function updateNowPlaying(lobby, looper) {
             nowPlayingArtwork.src = `${lobby.artworkCacheLocation}/${ref.libraryItem.artwork}`;
             nowPlayingTitle.innerText = ref.libraryItem.title;
             nowPlayingArtist.innerText = ref.libraryItem.artist;
+
+            rpc.setActivity({
+                details: ref.libraryItem.title,
+                state: `by ${ref.libraryItem.artist}`,
+                startTimestamp: isPlaying ? (Date.now() - controller.getPosition()) : undefined,
+                largeImageKey: 'main_icon',
+                largeImageText: `${packageInfo.name} ${packageInfo.version}`,
+                smallImageKey: isPlaying ? 'play' : 'pause',
+                smallImageText: isPlaying ? 'Playing' : 'Paused',
+                instance: false,
+            })
         } else {
             console.warn(`[${compactTime()}] Lobby playback state is not PLAYBACK_READY but no currently playing media is found.`);
             nowPlayingArtwork.src = nowPlayingTitle.innerText = nowPlayingArtist.innerText = '';
@@ -93,26 +114,30 @@ function updateNowPlaying(lobby, looper) {
 
         let nextRef = looper.upNext;
         if (nextRef) {
-            nextUp.style.opacity = 1;
+            nextUp.style.opacity = "1";
             nextUpArtwork.src = `${lobby.artworkCacheLocation}/${nextRef.libraryItem.artwork}`;
             nextUpTitle.innerText = nextRef.libraryItem.title;
             nextUpArtist.innerText = nextRef.libraryItem.artist;
         } else {
-            nextUp.style.opacity = 0;
+            nextUp.style.opacity = "0";
         }
     }
 }
 
 let config = {
-    title: SERVER_PARTY_TITLE,
-    serverPort: SERVER_PORT,
-    username: SERVER_USERNAME,
+    title: configJson.party_title || fallbackConfig.party_title,
+    serverPort: configJson.ws_port || fallbackConfig.ws_port,
+    username: configJson.party_host_username || fallbackConfig.party_host_username,
     player: controller,
-    libraryLocation: "D:/Music",
-    artworkCacheLocation: "D:/Music/.artwork_cache",
+    libraryLocation: configJson.music_src || fallbackConfig.music_src,
+    artworkCacheLocation: configJson.music_artwork_cache_src || fallbackConfig.music_artwork_cache_src,
     listener: {
         onConnected: function(lobby) {
-            document.getElementById("app-server-title").textContent = lobby.title;
+            let serverTitleEl = document.getElementById("app-server-title");
+            serverTitleEl.textContent = lobby.title;
+            serverTitleEl.onclick = function () {
+
+            };
         },
         onUserJoined: function (lobby, member) {
             let membersList = document.getElementById("app-server-members-list");
@@ -191,26 +216,31 @@ let config = {
     }
 };
 
-let lobby = new ServerLobby(config);
+function initializeServer() {
+    let lobby = new ServerLobby(config);
 
-let nowPlayingControlSkip = document.getElementById("now-playing-control-skip");
-nowPlayingControlSkip.onclick = () => lobby.looper.skip();
+    let nowPlayingControlSkip = document.getElementById("now-playing-control-skip");
+    nowPlayingControlSkip.onclick = () => lobby.looper.skip();
 
-const nowPlayingProgressbar = document.querySelector(".now-playing-progressbar");
-const nowPlayingProgressbarValue = document.querySelector(".now-playing-progressbar-value");
-const lobbyLooper = lobby.looper;
-const updatesInterval = 1000 / 120; // 120 FPS
-setInterval(() => {
-    let nowPlayingProgressbarWidth = nowPlayingProgressbar.clientWidth;
-    let q = lobbyLooper.currentQueue;
-    if (q) {
-        let ref = q.playing;
-        if (ref) {
-            let progress = controller.getPosition() / ref.libraryItem.length;
-            nowPlayingProgressbarValue.style.width = (progress * nowPlayingProgressbarWidth) + "px";
-            return;
+    const nowPlayingProgressbar = document.querySelector(".now-playing-progressbar");
+    const nowPlayingProgressbarValue = document.querySelector(".now-playing-progressbar-value");
+    const lobbyLooper = lobby.looper;
+    const updatesInterval = 1000 / 120; // 120 FPS
+    setInterval(() => {
+        let nowPlayingProgressbarWidth = nowPlayingProgressbar.clientWidth;
+        let q = lobbyLooper.currentQueue;
+        if (q) {
+            let ref = q.playing;
+            if (ref) {
+                let progress = controller.getPosition() / ref.libraryItem.length;
+                nowPlayingProgressbarValue.style.width = (progress * nowPlayingProgressbarWidth) + "px";
+                return;
+            }
         }
-    }
 
-    nowPlayingProgressbarValue.style.width = "0";
-}, updatesInterval);
+        nowPlayingProgressbarValue.style.width = "0";
+    }, updatesInterval);
+}
+
+rpc.on('ready', initializeServer)
+rpc.login({ clientId }).catch(console.error)

@@ -1,8 +1,10 @@
 const promiseAny = require('promise-any');
 const { ServerLobby, compactTime } = require("./PartyCast")
+const configJson = require('./partycast.json') || {}
+const fallbackConfig = configJson.disable_example_as_fallback ? {} : (require('./partycast.example.json') || {})
 
 const LinuxOmxplayer = require("./partycastplayers/LinuxOmxplayer");
-const ElectronUI = require("./ui/main");
+const DummyPlayer = require("./partycastplayers/DummyPlayer");
 
 console.log(`[index.js @ ${compactTime()}] Initializing Nodecast...`);
 
@@ -12,14 +14,9 @@ if (process.env.npm_package_version.includes("-dev")) {
     console.warn("Please check git repo for stable release.");
 }
 
-// config vars
-const SERVER_PORT = "10784";
-const SERVER_PARTY_TITLE = "Nodecast " + process.env.npm_package_version;
-const SERVER_USERNAME = "Nodecast";
-
 const SERVER_MUSIC_PLAYER_CONTROLLERS = [
-    new ElectronUI().checkAvailable(),
-    new LinuxOmxplayer(/* volume */ "-300").checkAvailable()
+    new LinuxOmxplayer(/* volume */ "-300").checkAvailable(),
+    DummyPlayer.checkAvailable()
 ];
 
 console.log(`[index.js @ ${compactTime()}] Looking for music player controller...`);
@@ -28,10 +25,12 @@ promiseAny(SERVER_MUSIC_PLAYER_CONTROLLERS).then((controller) => {
     console.log(`[index.js @ ${compactTime()}] Picked \"${controller.constructor.name}\" as music player controller`);
 
     let config = {
-        title: SERVER_PARTY_TITLE,
-        serverPort: SERVER_PORT,
-        username: SERVER_USERNAME,
+        title: configJson.party_title || fallbackConfig.party_title,
+        serverPort: configJson.ws_port || fallbackConfig.ws_port,
+        username: configJson.party_host_username || fallbackConfig.party_host_username,
         player: controller,
+        libraryLocation: configJson.music_src || fallbackConfig.music_src,
+        artworkCacheLocation: configJson.music_artwork_cache_src || fallbackConfig.music_artwork_cache_src,
         listener: {
             // events list copied from android implementation
             onConnected: function(lobby) { },
