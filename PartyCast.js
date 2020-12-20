@@ -137,11 +137,11 @@ const LibraryProvider = class {
 
     reload() {
         let self = this;
-        return new Promise(function (resolve, reject) {
+        return new Promise((resolve) => {
             self.items = [];
             let pendingPromises = [];
             fs.readdirSync(self.location).forEach(file => {
-                let absPath = self.location + "/" + file;
+                const absPath = self.location + "/" + file;
                 fs.mkdirSync(self.context.artworkCacheLocation, { recursive: true })
                 pendingPromises.push(new Promise(function (resolve, reject) {
                     mm.parseFile(absPath).then(metadata => {
@@ -163,7 +163,7 @@ const LibraryProvider = class {
                 }));
             });
 
-            Promise.allSettled(pendingPromises).then(function (res) {
+            return Promise.allSettled(pendingPromises).then(() => {
                 self.items = self.items.filter(x => x.title);
                 self.items.sort((a, b) => a.title.localeCompare(b.title));
                 resolve(self);
@@ -295,7 +295,7 @@ const QueueLooper = class {
 
             this._broadcastLobbyUpdate();
         } else if (this.context.playbackState === PLAYBACK_PAUSED) {
-            skip();
+            this.skip();
         } else console.warn("Requested to play queue looper but is already playing");
     }
     pause() {

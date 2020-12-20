@@ -1,7 +1,7 @@
 const promiseAny = require('promise-any');
-const { ServerLobby, compactTime } = require("./PartyCast")
-const configJson = require('./partycast.json') || {}
-const fallbackConfig = configJson.disable_example_as_fallback ? {} : (require('./partycast.example.json') || {})
+const { ServerLobby, compactTime } = require("../PartyCast")
+const configJson = require('../partycast.json') || {}
+const fallbackConfig = configJson.disable_example_as_fallback ? {} : (require('../partycast.example.json') || {})
 
 const LinuxOmxplayer = require("./partycastplayers/LinuxOmxplayer");
 const DummyPlayer = require("./partycastplayers/DummyPlayer");

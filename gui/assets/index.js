@@ -24,7 +24,25 @@ let controller = {
         this.audio.play();
         this.playing = true;
         let self = this;
-        this.audio.addEventListener('ended', (event) => {
+        this.audio.addEventListener('pause', () => {
+            if (!this.audio.ignoreEvents) {
+                console.log("Received pause event from unknown source");
+                this.playing = false;
+                this.lobby.playbackState = PlaybackState.PLAYBACK_PAUSED;
+                this.lobby.looper._broadcastLobbyUpdate();
+            }
+            this.audio.ignoreEvents = false; // clear flag
+        });
+        this.audio.addEventListener('play', () => {
+            console.log("Received play event from unknown source");
+            if (!this.audio.ignoreEvents) {
+                this.playing = true;
+                this.lobby.playbackState = PlaybackState.PLAYBACK_PLAYING;
+                this.lobby.looper._broadcastLobbyUpdate();
+            }
+            this.audio.ignoreEvents = false; // clear flag
+        });
+        this.audio.addEventListener('ended', () => {
             if (!self.killed) {
                 self.playing = false;
                 callback();
@@ -33,12 +51,14 @@ let controller = {
     },
     pause: function () {
         if (this.playing) {
+            this.audio.ignoreEvents = true;
             this.audio.pause();
             this.playing = false;
         }
     },
     resume: function () {
         if (typeof this.audio !== 'undefined') {
+            this.audio.ignoreEvents = true;
             this.audio.play();
             this.playing = true;
         }

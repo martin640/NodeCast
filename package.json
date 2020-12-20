@@ -2,10 +2,10 @@
   "name": "nodecast",
   "version": "1.0.4",
   "description": "NodeJS server for PartyCast",
-  "main": "main.js",
+  "main": "cli/main.js",
   "scripts": {
-    "start-cli": "node main.js",
-    "start-ui": "electron main-ui.js"
+    "start-cli": "node cli/main.js",
+    "start-ui": "electron gui/main.js"
   },
   "repository": {
     "url": "https://github.com/martin640/NodeCast"
