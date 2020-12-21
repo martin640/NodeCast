@@ -244,7 +244,7 @@ function MiniPlayer() {
             largeImageKey: 'idle',
             largeImageText: 'Idle',
             instance: false,
-        })
+        }).catch(() => {})
     } else {
         const isPlaying = data.lobby.playbackState === PlaybackState.PLAYBACK_PLAYING
         controlPlayD = isPlaying ? 'M14,19H18V5H14M6,19H10V5H6V19Z' : 'M8,5.14V19.14L19,12.14L8,5.14Z'
@@ -267,7 +267,7 @@ function MiniPlayer() {
                 smallImageKey: isPlaying ? 'play' : 'pause',
                 smallImageText: isPlaying ? 'Playing' : 'Paused',
                 instance: false,
-            })
+            }).catch(() => {})
         } else {
             console.warn(`[${compactTime()}] Lobby playback state is not PLAYBACK_READY but no currently playing media is found.`)
         }
@@ -316,7 +316,7 @@ function MiniPlayer() {
     )
 }
 
-rpc.on('ready', () => {
+const init = () => {
     ReactDOM.render((
         <DataProvider>
             <div className="root-wrapper">
@@ -332,5 +332,9 @@ rpc.on('ready', () => {
             </div>
         </DataProvider>
     ), document.getElementById('root'))
+}
+rpc.on('ready', () => {})
+rpc.login({clientId}).then(init).catch((err) => {
+    console.error(err)
+    init()
 })
-rpc.login({clientId}).catch(console.error)
