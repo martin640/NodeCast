@@ -1,4 +1,4 @@
-const { ServerLobby, compactTime, PlaybackState } = require("../../PartyCast")
+const {ServerLobby, compactTime, PlaybackState} = require("../../PartyCast")
 const DiscordRPC = require('discord-rpc')
 const packageInfo = require('../../package.json')
 const configJson = require('../../partycast.json') || {}
@@ -6,19 +6,21 @@ const fallbackConfig = configJson.disable_example_as_fallback ? {} : (require('.
 
 const clientId = '790227124597948436'
 DiscordRPC.register(clientId)
-const rpc = new DiscordRPC.Client({ transport: 'ipc' })
+const rpc = new DiscordRPC.Client({transport: 'ipc'})
 
-console.log(`[${compactTime()}] Initializing Nodecast with UI...`);
-
-let controller = {
+const controller = {
     name: "ElectronDocumentController",
     lobby: undefined,
     audio: undefined,
     playing: false,
     killed: false,
 
-    checkAvailable: function () { return Promise.resolve(this) },
-    prepare: function (lobby) { this.lobby = lobby },
+    checkAvailable: function () {
+        return Promise.resolve(this)
+    },
+    prepare: function (lobby) {
+        this.lobby = lobby
+    },
     play: function (file, callback) {
         this.audio = new Audio(file);
         this.audio.play();
@@ -70,57 +72,196 @@ let controller = {
         if (typeof this.audio !== 'undefined') return Math.round(this.audio.currentTime * 1000);
         else return 0;
     },
-    isPlaying: function () { return this.playing }
+    isPlaying: function () {
+        return this.playing
+    }
 }
 
-function updateNowPlaying(lobby, looper) {
-    let nowPlayingArtwork = document.getElementById("now-playing-image");
-    let nowPlayingTitle = document.getElementById("now-playing-title");
-    let nowPlayingArtist = document.getElementById("now-playing-artist");
+const DataContext = React.createContext({})
 
-    let nowPlayingControlPlay = document.getElementById("now-playing-control-play");
+class DataProvider extends React.Component {
+    state = {
+        loadingLobby: true, loadingLibrary: true,
+        skip: () => this.state.lobby.looper.skip()
+    }
+    update() {
+        this.setState(this.state)
+    }
 
-    let nextUp = document.querySelector(".now-playing-up-next");
-    let nextUpArtwork = document.getElementById("up-next-image");
-    let nextUpTitle = document.getElementById("up-next-title");
-    let nextUpArtist = document.getElementById("up-next-artist");
+    componentDidMount() {
+        const config = {
+            title: configJson.party_title || fallbackConfig.party_title,
+            serverPort: configJson.ws_port || fallbackConfig.ws_port,
+            username: configJson.party_host_username || fallbackConfig.party_host_username,
+            player: controller,
+            libraryLocation: configJson.music_src || fallbackConfig.music_src,
+            artworkCacheLocation: configJson.music_artwork_cache_src || fallbackConfig.music_artwork_cache_src,
+            listener: {
+                onConnected: (lobby) => {
+                    if (this.state.loadingLobby) this.setState({loadingLobby: false})
+                    else this.update()
 
-    nowPlayingArtwork.onerror = function() {
-        nowPlayingArtwork.src = 'error.svg';
-    };
+                    this.proxyListeners.forEach(x => x.onConnected && x.onConnected(lobby))
+                },
+                onUserJoined: () => this.update(),
+                onUserLeft: () => this.update(),
+                onUserUpdated: () => this.update(),
+                onDisconnect: () => this.update(),
+                onError: () => this.update(),
+                onLobbyStateChanged: () => this.update(),
+                onLooperUpdated: () => this.update(),
+                onLibraryUpdated: () => {
+                    if (this.state.loadingLibrary) this.setState({loadingLibrary: false})
+                    else this.update()
+                }
+            }
+        }
 
-    if (lobby.playbackState === PlaybackState.PLAYBACK_READY) {
-        nowPlayingArtwork.src = nowPlayingTitle.innerText = nowPlayingArtist.innerText = '';
+        const lobby = new ServerLobby(config)
+        this.setState({lobby})
+    }
 
+    render() {
+        if (this.state.loadingLobby) {
+            return <p style={{margin: 16}}>Initializing server...</p>
+        } else {
+            return <DataContext.Provider value={this.state} {...this.props} />
+        }
+    }
+}
+
+function Sidebar() {
+    const data = React.useContext(DataContext)
+
+    const kick = (val) => val.connection.close(4000, "You've been kicked from the session")
+
+    return (
+        <React.Fragment>
+            <h3>{data.lobby.title}</h3>
+            <div id="app-server-members-list">
+                <small className="heading">Connected users:</small>
+                {data.lobby.members.filter(x => x.id > 1).map(val => (
+                    <p key={val.id} onClick={() => kick(val)} title="Click to kick user">
+                        <span>{val.name}</span>
+                        <br/>
+                        <small>{val.connection?.remoteAddress}</small>
+                    </p>
+                ))}
+            </div>
+        </React.Fragment>
+    )
+}
+
+function LibraryView() {
+    const data = React.useContext(DataContext)
+
+    const enqueue = (row) => {
+        let id = row.id;
+        if (!data.lobby._enqueueById(data.lobby.selfMember, id)) {
+            console.warn(`[${compactTime()}] Enqueue item failed: ${id} not found`);
+            alert("Item not found in library");
+        }
+    }
+
+    if (data.loadingLibrary) {
+        return <p style={{margin: 16}}>Loading library... This might take a while</p>
+    } else {
+        const libraryItems = data.lobby.libraryProvider.items
+        return (
+            <React.Fragment>
+                {libraryItems.map(val => (
+                    <div className="library-element" key={val.id} onClick={() => enqueue(val)}>
+                        <img src={`${data.lobby.artworkCacheLocation}/${val.artwork}`} alt="Song artwork"/>
+                        <div className="flex vertical center">
+                            {val.title}<br/>{val.artist}
+                        </div>
+                    </div>
+                ))}
+            </React.Fragment>
+        )
+    }
+}
+
+function ProgressBar(props) {
+    const {controller, max, progress, ...otherProps} = props
+    const [progressReal, setProgress] = React.useState(progress || 0)
+
+    React.useEffect(() => {
+        const id = setInterval(() => {
+            //let nowPlayingProgressbarWidth = nowPlayingProgressbar.clientWidth
+            setProgress(controller.getPosition() / max * 100)
+        }, 1000 / 120)
+
+        return () => clearInterval(id)
+    }, [progress, controller, max])
+
+    return (
+        <div className="now-playing-progressbar" {...otherProps}>
+            <div className="now-playing-progressbar-value" style={{width: progressReal + "%"}}>
+            </div>
+        </div>
+    )
+}
+
+function ProgressTextView(props) {
+    const [formatted, setFormatted] = React.useState("--:--")
+    const {time, start, end, ...otherProps} = props
+
+    React.useEffect(() => {
+        const id = setInterval(() => {
+            let millis = time
+            if (start) {
+                millis = Date.now() - start
+            } else if (end) {
+                millis = end - Date.now()
+            }
+
+            if (!isNaN(millis)) {
+                const minutes = Math.floor(millis / 60000)
+                const seconds = Math.floor((millis % 60000) / 1000)
+                setFormatted(`${minutes}:${seconds > 9 ? seconds : ("0" + seconds)}`)
+            } else setFormatted("--:--")
+        }, 1000 / 120)
+
+        return () => clearInterval(id)
+    }, [time, start, end])
+
+    return <small {...otherProps}>{formatted}</small>
+}
+
+function MiniPlayer() {
+    const data = React.useContext(DataContext)
+
+    let artworkSrc = 'error.svg',
+        title = '', artist = '', length = 0, start,
+        controlPlayD = 'M8,5.14V19.14L19,12.14L8,5.14Z',
+        controlPlayA = () => {},
+        controlSkipA = () => data.lobby.looper.skip(),
+        nowPlaying, nextRef
+
+    if (data.lobby.playbackState === PlaybackState.PLAYBACK_READY) {
         rpc.setActivity({
             largeImageKey: 'idle',
             largeImageText: 'Idle',
             instance: false,
         })
     } else {
-        const isPlaying = lobby.playbackState === PlaybackState.PLAYBACK_PLAYING
-        if (isPlaying) {
-            nowPlayingControlPlay.querySelector("path").setAttribute("d","M14,19H18V5H14M6,19H10V5H6V19Z");
-            nowPlayingControlPlay.onclick = function () {
-                lobby.looper.pause();
-            };
-        } else {
-            nowPlayingControlPlay.querySelector("path").setAttribute("d","M8,5.14V19.14L19,12.14L8,5.14Z");
-            nowPlayingControlPlay.onclick = function () {
-                lobby.looper.play();
-            };
-        }
+        const isPlaying = data.lobby.playbackState === PlaybackState.PLAYBACK_PLAYING
+        controlPlayD = isPlaying ? 'M14,19H18V5H14M6,19H10V5H6V19Z' : 'M8,5.14V19.14L19,12.14L8,5.14Z'
+        controlPlayA = isPlaying ? () => data.lobby.looper.pause() : () => data.lobby.looper.play()
 
-        let ref = looper.nowPlaying;
-        if (ref) {
-            nowPlayingArtwork.src = `${lobby.artworkCacheLocation}/${ref.libraryItem.artwork}`;
-            nowPlayingTitle.innerText = ref.libraryItem.title;
-            nowPlayingArtist.innerText = ref.libraryItem.artist;
+        nowPlaying = data.lobby.looper.nowPlaying
+        if (nowPlaying) {
+            artworkSrc =  `${data.lobby.artworkCacheLocation}/${nowPlaying.libraryItem.artwork}`
+            title = nowPlaying.libraryItem.title
+            artist = nowPlaying.libraryItem.artist
+            length = nowPlaying.libraryItem.length
+            start = isPlaying ? (Date.now() - controller.getPosition()) : undefined
 
             rpc.setActivity({
-                details: ref.libraryItem.title,
-                state: `by ${ref.libraryItem.artist}`,
-                startTimestamp: isPlaying ? (Date.now() - controller.getPosition()) : undefined,
+                details: title,
+                state: `by ${artist}`,
+                startTimestamp: start,
                 largeImageKey: 'main_icon',
                 largeImageText: `${packageInfo.name} ${packageInfo.version}`,
                 smallImageKey: isPlaying ? 'play' : 'pause',
@@ -128,139 +269,68 @@ function updateNowPlaying(lobby, looper) {
                 instance: false,
             })
         } else {
-            console.warn(`[${compactTime()}] Lobby playback state is not PLAYBACK_READY but no currently playing media is found.`);
-            nowPlayingArtwork.src = nowPlayingTitle.innerText = nowPlayingArtist.innerText = '';
+            console.warn(`[${compactTime()}] Lobby playback state is not PLAYBACK_READY but no currently playing media is found.`)
         }
 
-        let nextRef = looper.upNext;
-        if (nextRef) {
-            nextUp.style.opacity = "1";
-            nextUpArtwork.src = `${lobby.artworkCacheLocation}/${nextRef.libraryItem.artwork}`;
-            nextUpTitle.innerText = nextRef.libraryItem.title;
-            nextUpArtist.innerText = nextRef.libraryItem.artist;
-        } else {
-            nextUp.style.opacity = "0";
-        }
+        nextRef = data.lobby.looper.upNext
     }
+
+    return (
+        <React.Fragment>
+            <ProgressBar controller={controller} max={length}/>
+            <div className="now-playing">
+                <div className="now-playing-left">
+                    <img id="now-playing-image" src={artworkSrc} alt="Now Playing artwork"/>
+                </div>
+                <div className="now-playing-right flex vertical center">
+                    <h4 id="now-playing-title">{title}</h4>
+                    <span id="now-playing-artist">{artist}</span>
+                </div>
+            </div>
+            <div className="now-playing-controls">
+                <ProgressTextView start={start} className="flex center-all" style={{marginRight: 24, color: "#ffffff77"}}/>
+                <div className="now-playing-control-item flex center-all" onClick={controlPlayA}>
+                    <svg style={{width: 24, height: 24}} viewBox="0 0 24 24">
+                        <path fill="currentColor" d={controlPlayD}/>
+                    </svg>
+                </div>
+                <div className="now-playing-control-item flex center-all" onClick={controlSkipA}>
+                    <svg style={{width: 24, height: 24}} viewBox="0 0 24 24">
+                        <path fill="currentColor" d="M16,18H18V6H16M6,18L14.5,12L6,6V18Z"/>
+                    </svg>
+                </div>
+                <ProgressTextView time={length} className="flex center-all" style={{marginLeft: 24, color: "#ffffff77"}}/>
+            </div>
+            <div className="now-playing-up-next" style={{opacity: nextRef ? 1 : 0}}>
+                <div className="up-next-left flex vertical center">
+                    <small style={{fontSize: "0.8em", opacity: "0.5"}}>Up next:</small>
+                    <h4 id="up-next-title">{nextRef?.libraryItem?.title}</h4>
+                    <span id="up-next-artist">{nextRef?.libraryItem?.artist}</span>
+                </div>
+                <div className="up-next-right">
+                    <img id="up-next-image" alt="Next up artwork"
+                         src={nextRef ?`${data.lobby.artworkCacheLocation}/${nextRef.libraryItem.artwork}` : "error.svg"}/>
+                </div>
+            </div>
+        </React.Fragment>
+    )
 }
 
-let config = {
-    title: configJson.party_title || fallbackConfig.party_title,
-    serverPort: configJson.ws_port || fallbackConfig.ws_port,
-    username: configJson.party_host_username || fallbackConfig.party_host_username,
-    player: controller,
-    libraryLocation: configJson.music_src || fallbackConfig.music_src,
-    artworkCacheLocation: configJson.music_artwork_cache_src || fallbackConfig.music_artwork_cache_src,
-    listener: {
-        onConnected: function(lobby) {
-            let serverTitleEl = document.getElementById("app-server-title");
-            serverTitleEl.textContent = lobby.title;
-            serverTitleEl.onclick = function () {
-
-            };
-        },
-        onUserJoined: function (lobby, member) {
-            let membersList = document.getElementById("app-server-members-list");
-            let li = document.createElement("p");
-            li.setAttribute("id", member.id);
-            li.appendChild(document.createTextNode(member.name));
-            li.appendChild(document.createElement("br"));
-            let liOrigin = document.createElement("small");
-            liOrigin.innerText = member.connection.remoteAddress;
-            li.appendChild(liOrigin);
-            li.onclick = function () {
-                // test kicking
-                member.connection.close(4000, "You has been kicked from session");
-            };
-            li.title = "Click to kick user";
-
-            membersList.appendChild(li);
-        },
-        onUserLeft: function (lobby, member) {
-            document.querySelector(`#app-server-members-list p[id='${member.id}']`).remove();
-        },
-        onUserUpdated: function (lobby, member) {
-            let li = document.querySelector(`#app-server-members-list p[id='${member.id}']`);
-            li.innerHTML = '';
-
-            li.appendChild(document.createTextNode(member.name));
-            li.appendChild(document.createElement("br"));
-            let liOrigin = document.createElement("small");
-            liOrigin.innerText = member.connection.remoteAddress;
-            li.appendChild(liOrigin);
-        },
-        onDisconnect: function (lobby, code, reason) { },
-        onError: function (lobby, error) { },
-        onLobbyStateChanged: function (lobby) {
-            updateNowPlaying(lobby, lobby.looper);
-        },
-        onLooperUpdated: function (lobby, looper) {
-            updateNowPlaying(lobby, looper);
-        },
-        onLibraryUpdated: function (lobby, libraryProvider) {
-            let library = document.getElementById("app-library-list");
-            library.innerHTML = '';
-            let libraryItems = libraryProvider.items;
-            for (let i = 0; i < libraryItems.length; i++) {
-                let libraryItemRow = libraryItems[i];
-
-                let newItem = document.createElement("div");
-                newItem.className = "library-element";
-                newItem.setAttribute("id", libraryItemRow.id);
-
-                let newItemArtwork = document.createElement("img");
-                newItemArtwork.onerror = function() {
-                    newItemArtwork.src = 'error.svg';
-                };
-                newItemArtwork.src = `${lobby.artworkCacheLocation}/${libraryItemRow.artwork}`;
-                newItem.appendChild(newItemArtwork);
-
-                let newItemInfo = document.createElement("div");
-                newItemInfo.className = "center-vertically";
-                newItemInfo.appendChild(document.createTextNode(libraryItemRow.title));
-                newItemInfo.appendChild(document.createElement("br"));
-                newItemInfo.appendChild(document.createTextNode(libraryItemRow.artist));
-                newItem.appendChild(newItemInfo);
-
-                newItem.onclick = function () {
-                    let id = libraryItemRow.id;
-                    if (!lobby._enqueueById(lobby.selfMember, id)) {
-                        console.warn(`[${compactTime()}] Enqueue item failed: ${id} not found`);
-                        alert("Item not found in library");
-                    }
-                };
-
-                library.appendChild(newItem);
-            }
-        }
-    }
-};
-
-function initializeServer() {
-    let lobby = new ServerLobby(config);
-
-    let nowPlayingControlSkip = document.getElementById("now-playing-control-skip");
-    nowPlayingControlSkip.onclick = () => lobby.looper.skip();
-
-    const nowPlayingProgressbar = document.querySelector(".now-playing-progressbar");
-    const nowPlayingProgressbarValue = document.querySelector(".now-playing-progressbar-value");
-    const lobbyLooper = lobby.looper;
-    const updatesInterval = 1000 / 120; // 120 FPS
-    setInterval(() => {
-        let nowPlayingProgressbarWidth = nowPlayingProgressbar.clientWidth;
-        let q = lobbyLooper.currentQueue;
-        if (q) {
-            let ref = q.playing;
-            if (ref) {
-                let progress = controller.getPosition() / ref.libraryItem.length;
-                nowPlayingProgressbarValue.style.width = (progress * nowPlayingProgressbarWidth) + "px";
-                return;
-            }
-        }
-
-        nowPlayingProgressbarValue.style.width = "0";
-    }, updatesInterval);
-}
-
-rpc.on('ready', initializeServer)
-rpc.login({ clientId }).catch(console.error)
+rpc.on('ready', () => {
+    ReactDOM.render((
+        <DataProvider>
+            <div className="root-wrapper">
+                <div className="panel-left">
+                    <Sidebar/>
+                </div>
+                <div className="content-middle">
+                    <LibraryView/>
+                </div>
+                <div className="panel-bottom">
+                    <MiniPlayer/>
+                </div>
+            </div>
+        </DataProvider>
+    ), document.getElementById('root'))
+})
+rpc.login({clientId}).catch(console.error)

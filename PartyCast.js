@@ -553,7 +553,7 @@ const ServerLobby = class {
                 console.log(`[PartyCast @ ${compactTime()}] User \"${clientUsername}\"@${connection.remoteAddress} has disconnected: [code ${reasonCode}] ${description}`);
 
                 if (clientMember) {
-                    thisLobby.members = thisLobby.members.filter(function(el) { return el !== clientMember; });
+                    thisLobby.members = thisLobby.members.filter(function(el) { return el.id !== clientMember.id; });
                     thisLobby._broadcastEvent("Event.USER_LEFT", clientMember);
 
                     for (let i = 0; i < thisLobby.listenersUnsafe.length; i++) {

@@ -5,7 +5,9 @@
   "main": "cli/main.js",
   "scripts": {
     "start-cli": "node cli/main.js",
-    "start-ui": "electron gui/main.js"
+    "compile-react": "npx babel gui/assets/index.js --out-file gui/assets/build/index.bundle.js",
+    "start-gui": "electron gui/main.js",
+    "compile-react-and-start-gui": "npm run compile-react && electron gui/main.js"
   },
   "repository": {
     "url": "https://github.com/martin640/NodeCast"
@@ -18,8 +20,16 @@
     "music-metadata": "^7.4.0",
     "promise-any": "^0.2.0",
     "websocket": "^1.0.32",
-    "electron": "^10.1.4",
+    "electron": "^11.1.0",
     "electron-prompt": "^1.6.0",
-    "discord-rpc": "^3.1.4"
+    "discord-rpc": "^3.1.4",
+    "react": "^17.0.1",
+    "react-dom": "^17.0.1",
+    "@material-ui/core": "^4.11.2",
+    "@babel/core": "^7.12.10",
+    "@babel/cli": "^7.12.10",
+    "@babel/preset-env": "^7.12.11",
+    "@babel/preset-react": "^7.12.10",
+    "@babel/plugin-syntax-class-properties": "^7.12.1"
   }
 }
