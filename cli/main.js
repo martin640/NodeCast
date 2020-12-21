@@ -1,7 +1,7 @@
 const promiseAny = require('promise-any');
-const { ServerLobby, compactTime } = require("../PartyCast")
-const configJson = require('../partycast.json') || {}
-const fallbackConfig = configJson.disable_example_as_fallback ? {} : (require('../partycast.example.json') || {})
+const { ServerLobby, compactTime } = require("../PartyCast");
+const configJson = require('../partycast.json') || {};
+const os = require("os");
 
 const LinuxOmxplayer = require("./partycastplayers/LinuxOmxplayer");
 const DummyPlayer = require("./partycastplayers/DummyPlayer");
@@ -25,12 +25,12 @@ promiseAny(SERVER_MUSIC_PLAYER_CONTROLLERS).then((controller) => {
     console.log(`[index.js @ ${compactTime()}] Picked \"${controller.constructor.name}\" as music player controller`);
 
     let config = {
-        title: configJson.party_title || fallbackConfig.party_title,
-        serverPort: configJson.ws_port || fallbackConfig.ws_port,
-        username: configJson.party_host_username || fallbackConfig.party_host_username,
+        title: configJson.party_title || os.hostname(),
+        serverPort: configJson.ws_port || 10784,
+        username: configJson.party_host_username || os.userInfo().username,
         player: controller,
-        libraryLocation: configJson.music_src || fallbackConfig.music_src,
-        artworkCacheLocation: configJson.music_artwork_cache_src || fallbackConfig.music_artwork_cache_src,
+        libraryLocation: configJson.music_dir || (os.homedir() + "/Music"),
+        dataLocation: configJson.data_dir || (os.homedir() + "/.nodecast"),
         listener: {
             // events list copied from android implementation
             onConnected: function(lobby) { },

@@ -2,14 +2,14 @@ const {ServerLobby, compactTime, PlaybackState} = require("../../PartyCast")
 const DiscordRPC = require('discord-rpc')
 const packageInfo = require('../../package.json')
 const configJson = require('../../partycast.json') || {}
-const fallbackConfig = configJson.disable_example_as_fallback ? {} : (require('../../partycast.example.json') || {})
+const os = require("os")
 
 const clientId = '790227124597948436'
 DiscordRPC.register(clientId)
 const rpc = new DiscordRPC.Client({transport: 'ipc'})
 
 const controller = {
-    name: "ElectronDocumentController",
+    name: "ElectronAudioController",
     lobby: undefined,
     audio: undefined,
     playing: false,
@@ -90,18 +90,16 @@ class DataProvider extends React.Component {
 
     componentDidMount() {
         const config = {
-            title: configJson.party_title || fallbackConfig.party_title,
-            serverPort: configJson.ws_port || fallbackConfig.ws_port,
-            username: configJson.party_host_username || fallbackConfig.party_host_username,
+            title: configJson.party_title || os.hostname(),
+            serverPort: configJson.ws_port || 10784,
+            username: configJson.party_host_username || os.userInfo().username,
             player: controller,
-            libraryLocation: configJson.music_src || fallbackConfig.music_src,
-            artworkCacheLocation: configJson.music_artwork_cache_src || fallbackConfig.music_artwork_cache_src,
+            libraryLocation: configJson.music_dir || (os.homedir() + "/Music"),
+            dataLocation: configJson.data_dir || (os.homedir() + "/.nodecast"),
             listener: {
-                onConnected: (lobby) => {
+                onConnected: () => {
                     if (this.state.loadingLobby) this.setState({loadingLobby: false})
                     else this.update()
-
-                    this.proxyListeners.forEach(x => x.onConnected && x.onConnected(lobby))
                 },
                 onUserJoined: () => this.update(),
                 onUserLeft: () => this.update(),
@@ -188,7 +186,6 @@ function ProgressBar(props) {
 
     React.useEffect(() => {
         const id = setInterval(() => {
-            //let nowPlayingProgressbarWidth = nowPlayingProgressbar.clientWidth
             setProgress(controller.getPosition() / max * 100)
         }, 1000 / 120)
 

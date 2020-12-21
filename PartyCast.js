@@ -5,6 +5,16 @@ const dgram = require('dgram');
 const mm = require('music-metadata');
 const path = require("path");
 
+Object.filter = function(obj, predicate) {
+    let result = {}, key;
+    for (key in obj) {
+        if (obj.hasOwnProperty(key) && predicate(obj[key], key)) {
+            result[key] = obj[key];
+        }
+    }
+    return result;
+};
+
 /* @deprecated */
 const PERMISSION_CHANGE_NAME = 1;
 const PERMISSION_QUEUE = 2;
@@ -140,32 +150,67 @@ const LibraryProvider = class {
         return new Promise((resolve) => {
             self.items = [];
             let pendingPromises = [];
+            const cacheListLoc = this.context.dataLocation + "/library_list_cache.json";
+            let cacheList;
+            try {
+                cacheList = JSON.parse(fs.readFileSync(cacheListLoc, 'utf8') || "{}");
+            } catch (e) {
+                cacheList = {};
+            }
+            fs.mkdirSync(self.context.dataLocation, { recursive: true });
+            fs.mkdirSync(self.context.artworkCacheLocation, { recursive: true });
+
+            const usedCacheKeys = [];
             fs.readdirSync(self.location).forEach(file => {
                 const absPath = self.location + "/" + file;
-                fs.mkdirSync(self.context.artworkCacheLocation, { recursive: true })
-                pendingPromises.push(new Promise(function (resolve, reject) {
-                    mm.parseFile(absPath).then(metadata => {
-                        if (Array.isArray(metadata.common.picture) && metadata.common.picture.length > 0) {
-                            let cacheLoc = self.context.resolveArtwork(file + ".jpg");
-                            if (!fs.existsSync(cacheLoc)) {
-                                let picture = metadata.common.picture[0];
-                                fs.writeFile(cacheLoc, picture.data, "binary", function(err) { });
-                            }
-                        }
+                usedCacheKeys.push(absPath);
 
+                pendingPromises.push(new Promise(function (resolve, reject) {
+                    if (cacheList.hasOwnProperty(absPath)) {
+                        // load from cache
+                        const cachedState = cacheList[absPath];
                         self.items.push(new LibraryItem(++self.idPool, file + ".jpg",
-                            metadata.common.title, metadata.common.artist, metadata.common.album, metadata.format.duration * 1000,
+                            cachedState.title, cachedState.artist, cachedState.album, cachedState.duration,
                             absPath, self));
                         resolve();
-                    }).catch(err => {
-                        reject(err);
-                    });
+                    } else {
+                        mm.parseFile(absPath).then(metadata => {
+                            if (Array.isArray(metadata.common.picture) && metadata.common.picture.length > 0) {
+                                let cacheLoc = self.context.resolveArtwork(file + ".jpg");
+                                if (!fs.existsSync(cacheLoc)) {
+                                    let picture = metadata.common.picture[0];
+                                    fs.writeFile(cacheLoc, picture.data, "binary", function(err) { });
+                                }
+                            }
+
+                            self.items.push(new LibraryItem(++self.idPool, file + ".jpg",
+                                metadata.common.title, metadata.common.artist, metadata.common.album, metadata.format.duration * 1000,
+                                absPath, self));
+                            cacheList[absPath] = {
+                                title: metadata.common.title,
+                                artist: metadata.common.artist,
+                                album: metadata.common.album,
+                                duration: metadata.format.duration * 1000,
+                            }
+                            resolve();
+                        }).catch(err => {
+                            reject(err);
+                        });
+                    }
                 }));
             });
 
             return Promise.allSettled(pendingPromises).then(() => {
                 self.items = self.items.filter(x => x.title);
                 self.items.sort((a, b) => a.title.localeCompare(b.title));
+
+                // filter out unused keys and save cache
+                const cacheLength1 = Object.keys(cacheList).length;
+                cacheList = Object.filter(cacheList, (val, key) => usedCacheKeys.includes(key));
+                const cacheLength2 = Object.keys(cacheList).length;
+                console.log(`[PartyCast @ ${compactTime()}] LibraryProvider removed ${cacheLength2 - cacheLength1} unused cache record(s)`);
+                fs.writeFile(cacheListLoc, JSON.stringify(cacheList), 'utf8', () => {});
+
                 resolve(self);
             });
         });
@@ -412,7 +457,8 @@ const ServerLobby = class {
         this.title = config.title || "Nodecast Server";
         this.port = config.port || 10784;
         this.libraryLocation = config.libraryLocation || "./music";
-        this.artworkCacheLocation = path.resolve(config.artworkCacheLocation || "./.artwork_cache");
+        this.dataLocation = path.resolve(config.dataLocation || "./.nodecast");
+        this.artworkCacheLocation = path.resolve(this.dataLocation + "/artwork_cache");
         this.config = config;
 
         // lobby variables
@@ -439,7 +485,7 @@ const ServerLobby = class {
             let songsCount = res.items.length;
             let buildSpeed = songsCount / buildTime;
             console.log(`[PartyCast @ ${compactTime()}] Library has been loaded successfully in ${buildTime.roundDecimal(2)} s`);
-            console.log(`[PartyCast @ ${compactTime()}] Library contains ${songsCount} songs (average scan speed: ${buildSpeed.roundDecimal(1)} songs/s)`);
+            console.log(`[PartyCast @ ${compactTime()}] Library contains ${songsCount} songs (average load speed: ${buildSpeed.roundDecimal(1)} songs/s)`);
 
             thisLobby._broadcastEvent("Event.LIBRARY_UPDATED", res);
             for (let i = 0; i < thisLobby.listenersUnsafe.length; i++) {

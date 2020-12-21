@@ -1,8 +1,7 @@
 {
   "party_title": "Nodecast Example Server",
   "party_host_username": "Nodecast",
-  "music_src": "./Music",
-  "music_artwork_cache_src": "./Music/.artwork_cache",
-  "ws_port": 10784,
-  "disable_example_as_fallback": true
+  "music_dir": "~/Music",
+  "data_dir": "~/Music/.nodecast",
+  "ws_port": 10784
 }

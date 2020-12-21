@@ -1,6 +1,7 @@
 {
   "presets": [
-    ["@babel/preset-react"]
+    "@babel/preset-react",
+    "minify"
   ],
   "plugins": ["@babel/plugin-syntax-class-properties"]
 }
