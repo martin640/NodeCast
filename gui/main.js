@@ -14,11 +14,11 @@ function createWindow() {
         webPreferences: {
             nodeIntegration: true
         },
-        icon: __dirname + '/app.ico'
+        icon: __dirname + '/app_icon.png'
     });
     window.removeMenu();
 
-    window.tray = new Tray(__dirname + '/app.ico');
+    window.tray = new Tray(__dirname + '/app_icon.png');
     window.tray.setContextMenu(Menu.buildFromTemplate([
         {label: `${packageInfo.name} ${packageInfo.version}`, enabled: false},
         {label: 'Open Nodecast', click: () => window.show()},
