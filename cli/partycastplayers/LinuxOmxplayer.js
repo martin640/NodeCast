@@ -9,10 +9,16 @@ module.exports = (volume) => ({
     name: "LinuxOmxplayer",
     defaultVolume: volume,
     volumeControl: {
+        _parent: undefined, // let's just assume this variable will not be used outside of getVolumeControl()
         level: volume, // 0-1
         muted: false,
         setLevel(v) {
             this.level = v;
+            console.debug("Updating volume to " + v);
+            if (this._parent.playing) {
+                console.debug("Player is currently playing, calling DBus command...");
+                this._parent._updateVolumeThroughDBus();
+            }
         },
         setMuted(v) {
             this.muted = v;
@@ -83,10 +89,27 @@ module.exports = (volume) => ({
         } else return this.cachedPosition;
     },
     getVolumeControl() {
+        if (!this.volumeControl._parent)
+            this.volumeControl._parent = this;
         return this.volumeControl;
     },
     isPlaying() { return this.playing; },
     _cacheTime() {
         this.cachedPosition += (Date.now() - this.startedTime);
+    },
+    _updateVolumeThroughDBus() {
+        const command = `export DBUS_SESSION_BUS_ADDRESS=$(cat /tmp/omxplayerdbus.\${USER:-root})
+                         dbus-send --print-reply --session --reply-timeout=500 \\
+                                   --dest=org.mpris.MediaPlayer2.omxplayer \\
+                         /org/mpris/MediaPlayer2 org.freedesktop.DBus.Properties.Set \\
+                           string:"org.mpris.MediaPlayer2.Player" \\
+                           string:"Volume" double:${this.volumeControl.level}`
+        exec(command, (error, stdout, stderr) => {
+            console.log('stdout: ' + stdout);
+            console.log('stderr: ' + stderr);
+            if (error !== null) {
+                console.log('exec error: ' + error);
+            }
+        });
     }
 })
