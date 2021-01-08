@@ -22,7 +22,7 @@ const SERVER_MUSIC_PLAYER_CONTROLLERS = [
 console.log(`[index.js @ ${compactTime()}] Looking for music player controller...`);
 
 promiseAny(SERVER_MUSIC_PLAYER_CONTROLLERS).then((controller) => {
-    console.log(`[index.js @ ${compactTime()}] Picked \"${controller.constructor.name}\" as music player controller`);
+    console.log(`[index.js @ ${compactTime()}] Picked \"${controller.name || controller.constructor.name}\" as music player controller`);
 
     let config = {
         title: configJson.party_title || fallbackConfig.party_title,
