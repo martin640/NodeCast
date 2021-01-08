@@ -16,14 +16,9 @@ module.exports = class LinuxOmxplayer {
         this.startedTime = 0;
     }
 
-    checkAvailable() {
-        let self = this;
-        return new Promise(((resolve, reject) => {
-            lookpath('omxplayer').then((res) => {
-                if (res) resolve(self);
-                else reject("Command not found");
-            });
-        }));
+    async checkAvailable() {
+        await lookpath('omxplayer');
+        return this;
     }
 
     prepare(lobby) { }

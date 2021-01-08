@@ -1,4 +1,3 @@
-const promiseAny = require('promise-any');
 const { ServerLobby, compactTime } = require("../PartyCast")
 const configJson = require('../partycast.json') || {}
 const fallbackConfig = configJson.disable_example_as_fallback ? {} : (require('../partycast.example.json') || {})
@@ -15,13 +14,13 @@ if (process.env.npm_package_version.includes("-dev")) {
 }
 
 const SERVER_MUSIC_PLAYER_CONTROLLERS = [
-    new LinuxOmxplayer(/* volume */ "-300").checkAvailable(),
-    DummyPlayer.checkAvailable()
+    new LinuxOmxplayer(/* volume */ "-300"),
+    DummyPlayer
 ];
 
 console.log(`[index.js @ ${compactTime()}] Looking for music player controller...`);
 
-promiseAny(SERVER_MUSIC_PLAYER_CONTROLLERS).then((controller) => {
+const run = (controller) => {
     console.log(`[index.js @ ${compactTime()}] Picked \"${controller.name || controller.constructor.name}\" as music player controller`);
 
     let config = {
@@ -46,7 +45,15 @@ promiseAny(SERVER_MUSIC_PLAYER_CONTROLLERS).then((controller) => {
     };
 
     let lobby = new ServerLobby(config);
-}).catch((err) => {
+}
+
+(async function() {
+    for (let i = 0; i < SERVER_MUSIC_PLAYER_CONTROLLERS.length; i++) {
+        const controller = SERVER_MUSIC_PLAYER_CONTROLLERS[i];
+        try {
+            return run(await controller.checkAvailable());
+        } catch (e) { /* skip */ }
+    }
     console.error(`[index.js @ ${compactTime()}] Failed to initialize server because no suitable music player is available for this platform.`);
-    console.error(`[index.js @ ${compactTime()}] Cause: ${err}`);
-})
+    console.error(`[index.js @ ${compactTime()}] Please refer to README.md for next steps.`);
+})();
