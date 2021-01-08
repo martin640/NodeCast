@@ -648,7 +648,7 @@ const ServerLobby = class {
                 volumeControl.setMuted(muted);
 
                 const newTmpState = { level, muted };
-                this._broadcastEvent("Event.VOLUME_CHANGED", newTmpState);
+                this._broadcastEvent("Event.VOLUME_UPDATED", newTmpState);
             } else {
                 console.warn(`[PartyCast @ ${compactTime()}] Unhandled message from ${clientMember.name}`);
             }

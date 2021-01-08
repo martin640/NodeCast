@@ -14,9 +14,7 @@ module.exports = (volume) => ({
         muted: false,
         setLevel(v) {
             this.level = v;
-            console.debug("Updating volume to " + v);
             if (this._parent.playing) {
-                console.debug("Player is currently playing, calling DBus command...");
                 this._parent._updateVolumeThroughDBus();
             }
         },
@@ -104,12 +102,6 @@ module.exports = (volume) => ({
                          /org/mpris/MediaPlayer2 org.freedesktop.DBus.Properties.Set \\
                            string:"org.mpris.MediaPlayer2.Player" \\
                            string:"Volume" double:${this.volumeControl.level}`
-        exec(command, (error, stdout, stderr) => {
-            console.log('stdout: ' + stdout);
-            console.log('stderr: ' + stderr);
-            if (error !== null) {
-                console.log('exec error: ' + error);
-            }
-        });
+        exec(command);
     }
 })
