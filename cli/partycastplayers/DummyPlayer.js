@@ -1,4 +1,4 @@
-module.exports = {
+module.exports = () => ({
     name: "DummyPlayer",
     playing: false,
     killed: false,
@@ -21,4 +21,4 @@ module.exports = {
     kill: function () { },
     getPosition: () => 0,
     isPlaying: function () { return this.playing }
-}
+})

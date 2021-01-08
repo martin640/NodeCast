@@ -5,24 +5,20 @@ const path = require("path");
 /**
  * This is default music player used on Linux-based systems. Requires package 'omxplayer'.
  */
-module.exports = class LinuxOmxplayer {
-    constructor(volume) {
-        this.volume = volume;
-
-        this.playerProcess = undefined;
-        this.playing = false;
-        this.killed = false;
-        this.cachedPosition = 0;
-        this.startedTime = 0;
-    }
+module.exports = (volume) => ({
+    name: "LinuxOmxplayer",
+    volume: volume,
+    playing: false,
+    killed: false,
+    playerProcess: undefined,
+    cachedPosition: 0,
+    startedTime: 0,
 
     async checkAvailable() {
         await lookpath('omxplayer');
         return this;
-    }
-
-    prepare(lobby) { }
-
+    },
+    prepare(lobby) { },
     play(file, endCallback) {
         let absolutePath = path.resolve(file);
         this.playerProcess = spawn("omxplayer", ["-o", "local", "--vol", this.volume, absolutePath]);
@@ -39,26 +35,26 @@ module.exports = class LinuxOmxplayer {
 
         let self = this;
         this.playerProcess.on('close', (code) => {
-            if (!self.killed) { // avoid firing callback when killed manually
-                self.playing = false;
+            if (!this.killed) { // avoid firing callback when killed manually
+                this.playing = false;
                 endCallback();
             } else self.killed = false;
         });
-    }
+    },
     pause() {
         if (this.playing) {
             this._cacheTime();
             this.playerProcess.stdin.write("p");
             this.playing = false;
         }
-    }
+    },
     resume() {
         if (!this.playing) {
             this.playerProcess.stdin.write("p");
             this.playing = true;
             this.startedTime = Date.now();
         }
-    }
+    },
     kill() {
         if (typeof this.playerProcess !== 'undefined') {
             this.killed = true;
@@ -69,17 +65,14 @@ module.exports = class LinuxOmxplayer {
             this.cachedPosition = 0;
             this.startedTime = 0;
         }
-    }
+    },
     getPosition() {
         if (this.playing) {
             return (Date.now() - this.startedTime) + this.cachedPosition;
         } else return this.cachedPosition;
-    }
-    isPlaying() {
-        return this.playing;
-    }
-
+    },
+    isPlaying() { return this.playing; },
     _cacheTime() {
         this.cachedPosition += (Date.now() - this.startedTime);
     }
-}
+})

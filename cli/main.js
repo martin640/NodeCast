@@ -14,8 +14,8 @@ if (process.env.npm_package_version.includes("-dev")) {
 }
 
 const SERVER_MUSIC_PLAYER_CONTROLLERS = [
-    new LinuxOmxplayer(/* volume */ "-300"),
-    DummyPlayer
+    LinuxOmxplayer(configJson.omx_volume || "-600"),
+    DummyPlayer()
 ];
 
 console.log(`[index.js @ ${compactTime()}] Looking for music player controller...`);
