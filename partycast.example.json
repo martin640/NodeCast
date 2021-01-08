@@ -4,5 +4,6 @@
   "music_src": "./Music",
   "music_artwork_cache_src": "./Music/.artwork_cache",
   "ws_port": 10784,
-  "disable_example_as_fallback": true
+  "disable_example_as_fallback": true,
+  "default_volume": 50
 }

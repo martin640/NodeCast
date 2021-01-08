@@ -13,8 +13,9 @@ if (process.env.npm_package_version.includes("-dev")) {
     console.warn("Please check git repo for stable release.");
 }
 
+const defaultVolume = ((configJson.default_volume || 50) / 100);
 const SERVER_MUSIC_PLAYER_CONTROLLERS = [
-    LinuxOmxplayer(configJson.omx_volume || "-600"),
+    LinuxOmxplayer(defaultVolume),
     DummyPlayer()
 ];
 

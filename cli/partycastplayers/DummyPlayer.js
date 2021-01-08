@@ -20,5 +20,13 @@ module.exports = () => ({
     },
     kill: function () { },
     getPosition: () => 0,
+    getVolumeControl() {
+        return {
+            level: 1, // 0-1
+            muted: false,
+            setLevel(v) {},
+            setMuted(v) {}
+        }
+    },
     isPlaying: function () { return this.playing }
 })

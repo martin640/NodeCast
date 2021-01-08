@@ -631,6 +631,24 @@ const ServerLobby = class {
                 this.looper.pause();
             } else if (eventType === 'LobbyCtl.PLAYBACK_SKIP' && clientMember.checkPermission(PERMISSION_MANAGE_QUEUE)) {
                 this.looper.skip();
+            } else if (eventType === 'LobbyCtl.VOLUME_UPDATE' && clientMember.checkPermission(PERMISSION_MANAGE_QUEUE)) {
+                const data = messageData.value;
+                const {level, muted} = data;
+                const volumeControl = this.config.player.getVolumeControl();
+                if (!volumeControl) {
+                    return connection.sendUTF(JSON.stringify({
+                        id: mid,
+                        type: "LobbyCtl.RESPONSE",
+                        status: -1,
+                        message: "Not supported"
+                    }));
+                }
+
+                volumeControl.setLevel(level);
+                volumeControl.setMuted(muted);
+
+                const newTmpState = { level, muted };
+                this._broadcastEvent("Event.VOLUME_CHANGED", newTmpState);
             } else {
                 console.warn(`[PartyCast @ ${compactTime()}] Unhandled message from ${clientMember.name}`);
             }
@@ -727,6 +745,7 @@ const ServerLobby = class {
     }
 
     toJson() {
+        const volumeControl = this.config.player.getVolumeControl();
         return {
             class: "Lobby",
             values: {
@@ -735,7 +754,11 @@ const ServerLobby = class {
                 members: serializeArray(this.members),
                 looper: serialize(this.looper),
                 library: serialize(this.libraryProvider),
-                playerState: this.playbackState
+                playerState: this.playbackState,
+                volumeState: {
+                    level: volumeControl.level,
+                    muted: volumeControl.muted
+                }
             }
         }
     }

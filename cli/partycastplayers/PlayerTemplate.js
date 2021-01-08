@@ -37,6 +37,15 @@ module.exports = class PlayerTemplate {
         // return playback progress in milliseconds
     }
 
+    getVolumeControl() {
+        return {
+            level: 1, // 0-1
+            muted: false,
+            setLevel(v) {},
+            setMuted(v) {}
+        }
+    }
+
     isPlaying() {
         return this.playing
     }

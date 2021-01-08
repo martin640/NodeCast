@@ -7,7 +7,17 @@ const path = require("path");
  */
 module.exports = (volume) => ({
     name: "LinuxOmxplayer",
-    volume: volume,
+    defaultVolume: volume,
+    volumeControl: {
+        level: volume, // 0-1
+        muted: false,
+        setLevel(v) {
+            this.level = v;
+        },
+        setMuted(v) {
+            this.muted = v;
+        }
+    },
     playing: false,
     killed: false,
     playerProcess: undefined,
@@ -21,7 +31,8 @@ module.exports = (volume) => ({
     prepare(lobby) { },
     play(file, endCallback) {
         let absolutePath = path.resolve(file);
-        this.playerProcess = spawn("omxplayer", ["-o", "local", "--vol", this.volume, absolutePath]);
+        this.playerProcess = spawn("omxplayer",
+            ["-o", "local", "--vol", String(2000 * (Math.log(this.volumeControl.level) / Math.LN10)), absolutePath]);
         /*this.playerProcess.stdout.on('data', function(data) {
             console.log(data.toString());
         });
@@ -34,7 +45,7 @@ module.exports = (volume) => ({
         this.startedTime = Date.now();
 
         let self = this;
-        this.playerProcess.on('close', (code) => {
+        this.playerProcess.on('close', () => {
             if (!this.killed) { // avoid firing callback when killed manually
                 this.playing = false;
                 endCallback();
@@ -70,6 +81,9 @@ module.exports = (volume) => ({
         if (this.playing) {
             return (Date.now() - this.startedTime) + this.cachedPosition;
         } else return this.cachedPosition;
+    },
+    getVolumeControl() {
+        return this.volumeControl;
     },
     isPlaying() { return this.playing; },
     _cacheTime() {
