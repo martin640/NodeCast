@@ -31,7 +31,38 @@ const run = (controller) => {
         player: controller,
         libraryLocation: configJson.music_src || fallbackConfig.music_src,
         artworkCacheLocation: configJson.music_artwork_cache_src || fallbackConfig.music_artwork_cache_src,
-        action_board: configJson.action_board || fallbackConfig.action_board,
+        actionBoard: {
+            number: 0,
+            generate(client) {
+                // generate action board for provided client
+                const res = [...(configJson.action_board || fallbackConfig.action_board || [])]
+                res.push({
+                    "id": 512,
+                    "itemType": 0,
+                    "inputType": 0,
+                    "title": "Example section",
+                })
+                res.push({
+                    "id": 513,
+                    "itemType": 1,
+                    "inputType": 0,
+                    "body": `Current counter value: ${this.number}`
+                })
+                res.push({
+                    "id": 513,
+                    "itemType": 2,
+                    "inputType": 1,
+                    "body": `Click to increase value`
+                })
+            },
+            handleInput(client, itemId, value) {
+                if (itemId === 513) {
+                    this.number++;
+                    return "OK";
+                }
+                throw "Unknown item id";
+            }
+        },
         listener: {
             // events list copied from android implementation
             onConnected: function(lobby) { },
@@ -46,7 +77,7 @@ const run = (controller) => {
         }
     };
 
-    let lobby = new ServerLobby(config);
+    const lobby = new ServerLobby(config);
 }
 
 (async function() {

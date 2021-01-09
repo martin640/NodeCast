@@ -48,19 +48,19 @@ const PlaybackState = {
     PLAYBACK_PAUSED: 2
 }
 
-function serialize(obj, ignoreWarn) {
-    if (typeof obj.toJson === 'function') return obj.toJson();
+function serialize(obj, client, ignoreWarn) {
+    if (typeof obj.toJson === 'function') return obj.toJson(client);
     else {
         if (!ignoreWarn)
             console.warn("serialize() returning plain object, might be data leak")
         return obj;
     }
 }
-function serializeArray(arr) {
+function serializeArray(arr, client) {
     let ret = [];
     if (!Array.isArray(arr)) return ret;
     for (let i = 0; i < arr.length; i++) {
-        ret.push(serialize(arr[i]));
+        ret.push(serialize(arr[i], client));
     }
     return ret;
 }
@@ -417,7 +417,7 @@ const ServerLobby = class {
         this.port = config.port || 10784;
         this.libraryLocation = config.libraryLocation || "./music";
         this.artworkCacheLocation = path.resolve(config.artworkCacheLocation || "./.artwork_cache");
-        this.actionBoard = config.action_board || [];
+        this.actionBoardProvider = config.actionBoard;
         this.config = config;
 
         // lobby variables
@@ -590,7 +590,34 @@ const ServerLobby = class {
             let eventType = messageData.type;
             let mid = messageData.id || -1;
 
-            if (eventType === 'LobbyCtl.UPDATE_USER') {
+            if (eventType === 'ActionBoard.SUBMIT') {
+                const data = messageData.value;
+                if (this.actionBoardProvider) {
+                    try {
+                        const res = this.actionBoardProvider.handleInput(clientMember, data.id, data.value);
+                        connection.sendUTF(JSON.stringify({
+                            id: mid,
+                            type: "LobbyCtl.RESPONSE",
+                            status: 0,
+                            message: res
+                        }));
+                    } catch (e) {
+                        connection.sendUTF(JSON.stringify({
+                            id: mid,
+                            type: "LobbyCtl.RESPONSE",
+                            status: -21,
+                            message: e.toString()
+                        }));
+                    }
+                } else {
+                    connection.sendUTF(JSON.stringify({
+                        id: mid,
+                        type: "LobbyCtl.RESPONSE",
+                        status: -5,
+                        message: "Action rejected"
+                    }));
+                }
+            } else if (eventType === 'LobbyCtl.UPDATE_USER') {
                 let data = messageData.value;
 
                 if (data.id === clientMember.id && clientMember.checkPermission(PERMISSION_CHANGE_NAME)) {
@@ -715,7 +742,7 @@ const ServerLobby = class {
             try {
                 conn.sendUTF(JSON.stringify({
                     "type": type,
-                    "data": (typeof data === 'string') ? data : serialize(data, true),
+                    "data": (typeof data === 'string') ? data : serialize(data, member, true),
                     "clientId": member.id
                 }));
             } catch (e) {
@@ -749,22 +776,22 @@ const ServerLobby = class {
         return path.resolve(`${this.artworkCacheLocation}/${artworkUri}`);
     }
 
-    toJson() {
+    toJson(client) {
         const volumeControl = this.config.player.getVolumeControl();
         return {
             class: "Lobby",
             values: {
                 title: this.title,
                 hostId: this.selfMember.id,
-                members: serializeArray(this.members),
-                looper: serialize(this.looper),
-                library: serialize(this.libraryProvider),
+                members: serializeArray(this.members, client),
+                looper: serialize(this.looper, client),
+                library: serialize(this.libraryProvider, client),
                 playerState: this.playbackState,
                 volumeState: {
                     level: volumeControl.level,
                     muted: volumeControl.muted
                 },
-                actionBoard: this.actionBoard
+                actionBoard: this.actionBoardProvider ? this.actionBoardProvider.generate(client) : []
             }
         }
     }
