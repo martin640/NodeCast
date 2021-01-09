@@ -535,7 +535,7 @@ const ServerLobby = class {
                 PERMISSIONS_MOD, clientAgent, connection, thisLobby);
 
             if (thisLobby.actionBoardProvider) {
-                clientMember.board = this.actionBoardProvider(clientMember, () => {
+                clientMember.board = thisLobby.actionBoardProvider(clientMember, () => {
                     thisLobby._sendEvent(clientMember, "Event.BOARD_UPDATED", {data: clientMember.board.generate()});
                 })
             }
