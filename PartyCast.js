@@ -534,7 +534,7 @@ const ServerLobby = class {
             let clientMember = new LobbyMember(clientUsername, ++thisLobby.memberIdPool,
                 PERMISSIONS_MOD, clientAgent, connection, thisLobby);
 
-            if (this.actionBoardProvider) {
+            if (thisLobby.actionBoardProvider) {
                 clientMember.board = this.actionBoardProvider(clientMember, () => {
                     thisLobby._sendEvent(clientMember, "Event.BOARD_UPDATED", {data: clientMember.board.generate()});
                 })
@@ -783,6 +783,7 @@ const ServerLobby = class {
     }
 
     toJson(client) {
+        console.log(client)
         const volumeControl = this.config.player.getVolumeControl();
         return {
             class: "Lobby",
