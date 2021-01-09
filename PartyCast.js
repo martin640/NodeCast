@@ -48,10 +48,13 @@ const PlaybackState = {
     PLAYBACK_PAUSED: 2
 }
 
-function serialize(obj) {
+function serialize(obj, ignoreWarn) {
     if (typeof obj.toJson === 'function') return obj.toJson();
-    if (typeof obj === 'object') return JSON.stringify(obj);
-    else return {};
+    else {
+        if (!ignoreWarn)
+            console.warn("Serializing plain object, might be data leak")
+        return JSON.stringify(obj);
+    }
 }
 function serializeArray(arr) {
     let ret = [];
@@ -711,7 +714,7 @@ const ServerLobby = class {
             try {
                 conn.sendUTF(JSON.stringify({
                     "type": type,
-                    "data": (typeof data === 'string') ? data : serialize(data),
+                    "data": (typeof data === 'string') ? data : serialize(data, true),
                     "clientId": member.id
                 }));
             } catch (e) {
