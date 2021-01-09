@@ -46,7 +46,7 @@ const run = (controller) => {
                     "id": 513,
                     "itemType": 1,
                     "inputType": 0,
-                    "body": `Current counter value: ${this.number}`
+                    "body": `Current counter value: <b><font color="#1f3c88">${this.number}</font></b>`
                 })
                 res.push({
                     "id": 514,
