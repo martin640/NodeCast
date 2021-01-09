@@ -5,5 +5,19 @@
   "music_artwork_cache_src": "./Music/.artwork_cache",
   "ws_port": 10784,
   "disable_example_as_fallback": true,
-  "default_volume": 50
+  "default_volume": 50,
+  "action_board": [
+    {
+      "id": 0,
+      "itemType": 0,
+      "inputType": 0,
+      "title": "Welcome",
+    },
+    {
+      "id": 1,
+      "itemType": 1,
+      "inputType": 0,
+      "body": "This is <i>example text block</i> from Nodecast default config."
+    }
+  ]
 }

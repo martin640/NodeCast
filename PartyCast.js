@@ -417,6 +417,7 @@ const ServerLobby = class {
         this.port = config.port || 10784;
         this.libraryLocation = config.libraryLocation || "./music";
         this.artworkCacheLocation = path.resolve(config.artworkCacheLocation || "./.artwork_cache");
+        this.actionBoard = config.action_board || [];
         this.config = config;
 
         // lobby variables
@@ -762,7 +763,8 @@ const ServerLobby = class {
                 volumeState: {
                     level: volumeControl.level,
                     muted: volumeControl.muted
-                }
+                },
+                actionBoard: this.actionBoard
             }
         }
     }
