@@ -58,7 +58,7 @@ const run = (controller) => {
                 return res
             },
             handleInput(itemId, value) {
-                if (itemId === 513) {
+                if (itemId === 514) {
                     this.number++;
                     this.changeHandler();
                     return "OK";
