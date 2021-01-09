@@ -783,7 +783,6 @@ const ServerLobby = class {
     }
 
     toJson(client) {
-        console.log(client)
         const volumeControl = this.config.player.getVolumeControl();
         return {
             class: "Lobby",
