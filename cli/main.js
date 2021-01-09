@@ -31,6 +31,7 @@ const run = (controller) => {
         player: controller,
         libraryLocation: configJson.music_src || fallbackConfig.music_src,
         artworkCacheLocation: configJson.music_artwork_cache_src || fallbackConfig.music_artwork_cache_src,
+        action_board: configJson.action_board || fallbackConfig.action_board,
         listener: {
             // events list copied from android implementation
             onConnected: function(lobby) { },
