@@ -54,6 +54,7 @@ const run = (controller) => {
                     "inputType": 1,
                     "body": `Click to increase value`
                 })
+                return res
             },
             handleInput(client, itemId, value) {
                 if (itemId === 513) {
