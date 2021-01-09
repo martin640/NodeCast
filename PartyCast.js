@@ -52,8 +52,8 @@ function serialize(obj, ignoreWarn) {
     if (typeof obj.toJson === 'function') return obj.toJson();
     else {
         if (!ignoreWarn)
-            console.warn("Serializing plain object, might be data leak")
-        return JSON.stringify(obj);
+            console.warn("serialize() returning plain object, might be data leak")
+        return obj;
     }
 }
 function serializeArray(arr) {
