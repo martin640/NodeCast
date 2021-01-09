@@ -49,7 +49,8 @@ const PlaybackState = {
 }
 
 function serialize(obj) {
-    if (typeof obj.toJson === "function") return obj.toJson();
+    if (typeof obj.toJson === 'function') return obj.toJson();
+    if (typeof obj === 'object') return JSON.stringify(obj);
     else return {};
 }
 function serializeArray(arr) {
