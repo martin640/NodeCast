@@ -52,6 +52,7 @@ const run = (controller) => {
                     "id": 513,
                     "itemType": 2,
                     "inputType": 1,
+                    "clickable": true,
                     "body": `Click to increase value`
                 })
                 return res
