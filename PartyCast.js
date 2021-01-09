@@ -534,6 +534,12 @@ const ServerLobby = class {
             let clientMember = new LobbyMember(clientUsername, ++thisLobby.memberIdPool,
                 PERMISSIONS_MOD, clientAgent, connection, thisLobby);
 
+            if (this.actionBoardProvider) {
+                clientMember.board = this.actionBoardProvider(clientMember, () => {
+                    thisLobby._sendEvent(clientMember, "Event.BOARD_UPDATED", {data: clientMember.board.generate()});
+                })
+            }
+
             console.log(`[PartyCast @ ${compactTime()}] User \"${clientUsername}\"@${connection.remoteAddress} connected; assigned ID ${clientMember.id}`);
 
             // acknowledge existing users before pushing new member to list
@@ -592,9 +598,9 @@ const ServerLobby = class {
 
             if (eventType === 'ActionBoard.SUBMIT') {
                 const data = messageData.value;
-                if (this.actionBoardProvider) {
+                if (clientMember.board) {
                     try {
-                        const res = this.actionBoardProvider.handleInput(clientMember, data.id, data.value);
+                        const res = clientMember.board.handleInput(data.id, data.value);
                         connection.sendUTF(JSON.stringify({
                             id: mid,
                             type: "LobbyCtl.RESPONSE",
@@ -732,7 +738,7 @@ const ServerLobby = class {
     _broadcastEvent(type, data) {
         for (let i = 0; i < this.members.length; i++) {
             let m = this.members[i];
-            this._sendEvent(m, type, data);
+            this._sendEvent(m, type, (typeof data === 'function') ? data(m) : data);
         }
     }
 
@@ -791,7 +797,7 @@ const ServerLobby = class {
                     level: volumeControl.level,
                     muted: volumeControl.muted
                 },
-                actionBoard: this.actionBoardProvider ? this.actionBoardProvider.generate(client) : []
+                actionBoard: client.board ? client.board.generate() : []
             }
         }
     }

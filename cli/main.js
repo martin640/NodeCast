@@ -31,10 +31,10 @@ const run = (controller) => {
         player: controller,
         libraryLocation: configJson.music_src || fallbackConfig.music_src,
         artworkCacheLocation: configJson.music_artwork_cache_src || fallbackConfig.music_artwork_cache_src,
-        actionBoard: {
+        actionBoard: (client, changeHandler) => ({
+            client, changeHandler,
             number: 0,
-            generate(client) {
-                // generate action board for provided client
+            generate() {
                 const res = [...(configJson.action_board || fallbackConfig.action_board || [])]
                 res.push({
                     "id": 512,
@@ -57,14 +57,15 @@ const run = (controller) => {
                 })
                 return res
             },
-            handleInput(client, itemId, value) {
+            handleInput(itemId, value) {
                 if (itemId === 513) {
                     this.number++;
+                    this.changeHandler();
                     return "OK";
                 }
                 throw "Unknown item id";
             }
-        },
+        }),
         listener: {
             // events list copied from android implementation
             onConnected: function(lobby) { },
