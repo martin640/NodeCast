@@ -25,9 +25,9 @@ const Permissions = {
     PERMISSION_MANAGE_QUEUE: 16,
     PERMISSION_OWNER: 64,
     PERMISSION_HOST: 0b111111111111111111111111111111,
-    PERMISSIONS_DEFAULT: this.PERMISSION_CHANGE_NAME | this.PERMISSION_QUEUE | this.PERMISSION_MEMBER_LIST,
-    PERMISSIONS_MOD: this.PERMISSIONS_DEFAULT | this.PERMISSION_MANAGE_USERS | this.PERMISSION_MANAGE_QUEUE
 }
+const PERMISSIONS_DEFAULT = Permissions.PERMISSION_CHANGE_NAME | Permissions.PERMISSION_QUEUE | Permissions.PERMISSION_MEMBER_LIST;
+const PERMISSIONS_MOD = PERMISSIONS_DEFAULT | Permissions.PERMISSION_MANAGE_USERS | Permissions.PERMISSION_MANAGE_QUEUE;
 const LobbyState = {
     STATE_CREATED: 0,
     STATE_CONNECTING: 1,
@@ -77,6 +77,11 @@ const LobbyMember = class {
 
     checkPermission(bit) {
         return ((this.permissions & bit) === bit);
+    }
+
+    broadcastUpdate() {
+        this.lobby._broadcastEvent("Event.USER_UPDATED", this);
+        this.lobby._emitListenersEvent("onUserUpdated", this);
     }
 
     export() {
@@ -334,7 +339,7 @@ const QueueLooper = class {
         });
         this.context.playbackState = PlaybackState.PLAYBACK_PLAYING;
         nextSong.start = Date.now();
-        cq.playingIndex = nextSong.id;
+        cq.playingIndex++;
 
         console.log(`${new Date()} Now playing: ${nextSong.libraryItem.artist} - ${nextSong.libraryItem.title}`);
 
@@ -509,7 +514,7 @@ const ServerLobby = class {
                 console.log(`[PartyCast @ ${compactTime()}] User \"${clientUsername}\"@${connection.remoteAddress} connected; found cached member by IP address`);
             } else {
                 clientMember = new LobbyMember(clientUsername, ++thisLobby.memberIdPool,
-                    Permissions.PERMISSIONS_DEFAULT, clientAgent, connection, thisLobby);
+                    PERMISSIONS_DEFAULT, clientAgent, connection, thisLobby);
                 thisLobby.memberCacheByIP[connection.remoteAddress] = clientMember;
                 console.log(`[PartyCast @ ${compactTime()}] User \"${clientUsername}\"@${connection.remoteAddress} connected; assigned new ID ${clientMember.id}`);
             }
@@ -774,5 +779,7 @@ module.exports.compactTime = compactTime;
 module.exports.LobbyMember = LobbyMember;
 module.exports.ServerLobby = ServerLobby;
 module.exports.Permissions = Permissions;
+module.exports.PERMISSIONS_DEFAULT = PERMISSIONS_DEFAULT;
+module.exports.PERMISSIONS_MOD = PERMISSIONS_MOD;
 module.exports.LobbyState = LobbyState;
 module.exports.PlaybackState = PlaybackState;
