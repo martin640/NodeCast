@@ -1,20 +1,103 @@
-# NodeCast
+# partycast-js
 
-<img src="../nodecast-example/screenshot.png">
-NodeCast is NodeJS implementation of PartyCast server allowing it to be run on embedded devices.
+partycast-js is NodeJS implementation of PartyCast server allowing it to be run on embedded devices.
 
-In order to run project "as is" without modifications, you will need:
-1. Linux system
-2. 'omxplayer' package (debian: `sudo apt install omxplayer`, arch: `sudo pacman -S omxplayer`)
-3. nodejs(10+) and npm
-4. Create `music` folder and put your music there
-5. Run `npm install` and `npm start`
-
-Alternatively create your own music player controller by following <a href="partycastplayers/PlayerTemplate.js">partycastplayers/PlayerTemplate.js</a> and changing main.js constant
+Usage:
 ```
-const SERVER_MUSIC_PLAYER_CONTROLLER = new YourMusicController();
-```
+const PartyCast = require("partycast-js");
 
-Windows users can use Electron-based UI with built-in music controller:
-1. Rename `partycast.example.json` to `partycast.json` and change according to your needs
-2. Run `npm install` and `npm run start-ui`
+const controller = {
+    name: "DummyPlayer",
+    playing: false,
+    killed: false,
+
+    // if controller depends on external command or program that needs to be loaded
+    // check if it's available and return self or throw error
+    checkAvailable: function () { return Promise.resolve(this) },
+    prepare: function (lobby) { },
+    play: function (file, callback) {
+        this.playing = true;
+    },
+    pause: function () {
+        if (this.playing) {
+            this.playing = false;
+        }
+    },
+    resume: function () {
+        if (!this.playing) {
+            this.playing = true;
+        }
+    },
+    kill: function () { },
+    getPosition: () => 0,
+    getVolumeControl() {
+        return {
+            level: 1, // 0-1
+            muted: false,
+            setLevel(v) {},
+            setMuted(v) {}
+        }
+    },
+    isPlaying: function () { return this.playing }
+};
+
+const config = {
+    title: "Server Title",
+    serverPort: 10784,
+    username: "Server Display Username in members list",
+    player: controller,
+    libraryLocation: "~/Music",
+    artworkCacheLocation: "~/.nodecast/cache",
+    actionBoard: (client, changeHandler) => ({
+        client, changeHandler,
+        number: 0,
+        generate() {
+            // geenerate action board for provided user
+            return [
+                {
+                    "id": 512,
+                    "itemType": 0,
+                    "inputType": 0,
+                    "title": "Example section",
+                },
+                {
+                    "id": 513,
+                    "itemType": 1,
+                    "inputType": 0,
+                    "body": `Current counter value: <b><font color="#1f3c88">${this.number}</font></b>`
+                },
+                {
+                    "id": 514,
+                    "itemType": 2,
+                    "inputType": 1,
+                    "clickable": true,
+                    "body": 'Click to increase value'
+                }
+            ];
+        },
+        handleInput(itemId, value) {
+            if (itemId === 514) {
+                this.number++;
+                this.changeHandler();
+                return "OK";
+            }
+            throw "Unknown item id";
+        }
+    }),
+    listener: {
+        // events list copied from android implementation
+        onConnected(lobby) { },
+        onUserJoined(lobby, member) { },
+        onUserLeft(lobby, member) { },
+        onUserUpdated(lobby, member) { },
+        onDisconnect(lobby, code, reason) { },
+        onError(lobby, error) { },
+        onLobbyStateChanged(lobby) { },
+        onLooperUpdated(lobby, looper) { },
+        onLibraryUpdated(lobby, libraryProvider) { }
+    }
+};
+
+const lobby = new PartyCast.ServerLobby(config);
+// do stuff
+```

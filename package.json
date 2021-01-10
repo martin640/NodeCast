@@ -1,13 +1,13 @@
 {
-  "name": "nodecast",
-  "version": "1.0.4",
+  "name": "partycast-js",
+  "version": "1.0.5",
   "description": "NodeJS server for PartyCast",
-  "main": "PartyCast.js",
+  "main": "index.js",
   "repository": {
     "url": "https://github.com/martin640/NodeCast"
   },
   "keywords": [],
-  "author": "martin64",
+  "author": "martin640",
   "license": "GPL-3.0-only",
   "dependencies": {
     "music-metadata": "^7.4.0",

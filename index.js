@@ -5,27 +5,17 @@ const dgram = require('dgram');
 const mm = require('music-metadata');
 const path = require("path");
 
-/* @deprecated */
-const PERMISSION_CHANGE_NAME = 1;
-const PERMISSION_QUEUE = 2;
-const PERMISSION_MEMBER_LIST = 4;
-const PERMISSION_MANAGE_USERS = 8;
-const PERMISSION_MANAGE_QUEUE = 16;
-const PERMISSION_OWNER = 64;
-const PERMISSION_HOST = 0b111111111111111111111111111111;
-
-const PERMISSIONS_DEFAULT = PERMISSION_CHANGE_NAME | PERMISSION_QUEUE | PERMISSION_MEMBER_LIST;
-const PERMISSIONS_MOD = PERMISSIONS_DEFAULT | PERMISSION_MANAGE_USERS | PERMISSION_MANAGE_QUEUE;
-
-const STATE_CREATED = 0;
-const STATE_CONNECTING = 1;
-const STATE_OPEN = 2;
-const STATE_CLOSED = 3;
-
-const PLAYBACK_READY = 0;
-const PLAYBACK_PLAYING = 1;
-const PLAYBACK_PAUSED = 2;
-/* @deprecated */
+function compactTime() {
+    return (new Date()).toLocaleDateString(undefined,
+        {
+            year: 'numeric', month: 'numeric', day: 'numeric',
+            hour: 'numeric', minute: '2-digit', second: '2-digit'
+        });
+}
+Number.prototype.roundDecimal = function (precision) {
+    let e = Math.pow(10, precision);
+    return Math.round((this + Number.EPSILON) * e) / e;
+}
 
 const Permissions = {
     PERMISSION_CHANGE_NAME: 1,
@@ -34,7 +24,9 @@ const Permissions = {
     PERMISSION_MANAGE_USERS: 8,
     PERMISSION_MANAGE_QUEUE: 16,
     PERMISSION_OWNER: 64,
-    PERMISSION_HOST: 0b111111111111111111111111111111
+    PERMISSION_HOST: 0b111111111111111111111111111111,
+    PERMISSIONS_DEFAULT: this.PERMISSION_CHANGE_NAME | this.PERMISSION_QUEUE | this.PERMISSION_MEMBER_LIST,
+    PERMISSIONS_MOD: this.PERMISSIONS_DEFAULT | this.PERMISSION_MANAGE_USERS | this.PERMISSION_MANAGE_QUEUE
 }
 const LobbyState = {
     STATE_CREATED: 0,
@@ -47,33 +39,29 @@ const PlaybackState = {
     PLAYBACK_PLAYING: 1,
     PLAYBACK_PAUSED: 2
 }
+const Utils = {
+    parseForExport(obj, extra) {
+        if (!extra) extra = {};
+        if (Array.isArray(obj)) {
+            const ret = [];
+            for (let i = 0; i < obj.length; i++) {
+                ret.push(Utils.parseForExport(obj[i], extra));
+            }
+            return ret;
+        } else if (typeof obj.export === 'function') {
+            return obj.export(extra);
+        } else if (extra.allowRaw) { // return raw object if allowed by options
+            return obj;
+        } else throw Error("parseForExport received plain object: might indicate data leak");
+    }
+}
 
+/* @deprecated */
 function serialize(obj, client, ignoreWarn) {
-    if (typeof obj.toJson === 'function') return obj.toJson(client);
-    else {
-        if (!ignoreWarn)
-            console.warn("serialize() returning plain object, might be data leak")
-        return obj;
-    }
 }
+/* @deprecated */
 function serializeArray(arr, client) {
-    let ret = [];
-    if (!Array.isArray(arr)) return ret;
-    for (let i = 0; i < arr.length; i++) {
-        ret.push(serialize(arr[i], client));
-    }
-    return ret;
-}
-function compactTime() {
-    return (new Date()).toLocaleDateString(undefined,
-        {
-            year: 'numeric', month: 'numeric', day: 'numeric',
-            hour: 'numeric', minute: '2-digit', second: '2-digit'
-        });
-}
-Number.prototype.roundDecimal = function (precision) {
-    let e = Math.pow(10, precision);
-    return Math.round((this + Number.EPSILON) * e) / e;
+
 }
 
 
@@ -91,7 +79,7 @@ const LobbyMember = class {
         return ((this.permissions & bit) === bit);
     }
 
-    toJson() {
+    export() {
         return {
             class: "LobbyMember",
             values: {
@@ -117,7 +105,7 @@ const LibraryItem = class {
         this.provider = provider;
     }
 
-    toJson() {
+    export() {
         return {
             class: "LibraryItem",
             values: {
@@ -175,12 +163,12 @@ const LibraryProvider = class {
         });
     }
 
-    toJson() {
+    export() {
         return {
             class: "LibraryProvider",
             values: {
                 name: "DefaultFilesystemLibraryProvider",
-                items: serializeArray(this.items),
+                items: Utils.parseForExport(this.items),
             }
         }
     }
@@ -195,7 +183,7 @@ const QueueItem = class {
         this.start = 0;
     }
 
-    toJson() {
+    export() {
         let artwork = this.libraryItem.artwork ? `http://[HOST]:${this.queue.looper.context.port}/art/${this.libraryItem.artwork}` : null;
         return {
             class: "RemoteMedia",
@@ -206,6 +194,8 @@ const QueueItem = class {
                 artist: this.libraryItem.artist,
                 artwork: artwork,
                 length: this.libraryItem.length,
+                /* todo check if this item is playing and return correct progress for past/future items
+                 *  this is related to bug in android showing same start time for all items */
                 progress: this.queue.looper.player.getPosition()
             }
         }
@@ -228,13 +218,13 @@ const Queue = class {
         return this.items[this.playingIndex+1];
     }
 
-    toJson() {
+    export() {
         return {
             class: "Queue",
             values: {
                 id: this.id,
                 playing: this.playingIndex,
-                media: serializeArray(this.items)
+                media: Utils.parseForExport(this.items)
             }
         }
     }
@@ -278,14 +268,14 @@ const QueueLooper = class {
         libraryItem.queue = queue;
         queue.items.push(libraryItem);
 
-        if (this.context.playbackState === PLAYBACK_READY) {
+        if (this.context.playbackState === PlaybackState.PLAYBACK_READY) {
             this.skip();
         } else {
             this._broadcastQueueUpdate();
         }
     }
     play() {
-        if (this.context.playbackState === PLAYBACK_PAUSED) {
+        if (this.context.playbackState === PlaybackState.PLAYBACK_PAUSED) {
             let q = this.currentQueue;
             if (q) {
                 let ref = q.playing;
@@ -295,16 +285,16 @@ const QueueLooper = class {
             }
 
             this.player.resume();
-            this.context.playbackState = PLAYBACK_PLAYING;
+            this.context.playbackState = PlaybackState.PLAYBACK_PLAYING;
 
             this._broadcastLobbyUpdate();
-        } else if (this.context.playbackState === PLAYBACK_PAUSED) {
+        } else if (this.context.playbackState === PlaybackState.PLAYBACK_PAUSED) {
             this.skip();
         } else console.warn("Requested to play queue looper but is already playing");
     }
     pause() {
         this.player.pause();
-        this.context.playbackState = PLAYBACK_PAUSED;
+        this.context.playbackState = PlaybackState.PLAYBACK_PAUSED;
 
         this._broadcastLobbyUpdate();
     }
@@ -315,7 +305,7 @@ const QueueLooper = class {
         }
 
         this.player.kill();
-        this.context.playbackState = PLAYBACK_READY;
+        this.context.playbackState = PlaybackState.PLAYBACK_READY;
 
         let cq = this.currentQueue;
         let nextId = cq.playingIndex + 1;
@@ -342,7 +332,7 @@ const QueueLooper = class {
         this.player.play(nextSong.libraryItem.path, function () {
             self.skip();
         });
-        this.context.playbackState = PLAYBACK_PLAYING;
+        this.context.playbackState = PlaybackState.PLAYBACK_PLAYING;
         nextSong.start = Date.now();
         cq.playingIndex = nextSong.id;
 
@@ -381,28 +371,20 @@ const QueueLooper = class {
 
     _broadcastLobbyUpdate() {
         this.context._broadcastEvent("Event.LOBBY_UPDATED", this.context);
-        for (let i = 0; i < this.context.listenersUnsafe.length; i++) {
-            try {
-                this.context.listenersUnsafe[i].onLobbyStateChanged(this.context);
-            } catch (e) { }
-        }
+        this.context._emitListenersEvent("onLobbyStateChanged");
     }
 
     _broadcastQueueUpdate() {
         this.context._broadcastEvent("Event.QUEUE_UPDATED", this);
-        for (let i = 0; i < this.context.listenersUnsafe.length; i++) {
-            try {
-                this.context.listenersUnsafe[i].onLooperUpdated(this.context, this);
-            } catch (e) { }
-        }
+        this.context._emitListenersEvent("onLooperUpdated", this);
     }
 
-    toJson() {
+    export() {
         return {
             class: "QueueLooper",
             values: {
                 currentQueue: this.currentQueuePos,
-                rounds: serializeArray(this.rounds)
+                rounds: Utils.parseForExport(this.rounds)
             }
         }
     }
@@ -410,13 +392,13 @@ const QueueLooper = class {
 
 const ServerLobby = class {
     constructor(config) {
-        let thisLobby = this;
+        const thisLobby = this;
 
         // lobby configuration
         this.title = config.title || "Nodecast Server";
         this.port = config.port || 10784;
-        this.libraryLocation = config.libraryLocation || "./music";
-        this.artworkCacheLocation = path.resolve(config.artworkCacheLocation || "./.artwork_cache");
+        this.libraryLocation = config.libraryLocation || "../Music";
+        this.artworkCacheLocation = path.resolve(config.artworkCacheLocation || "../.artwork_cache");
         this.actionBoardProvider = config.actionBoard;
         this.config = config;
 
@@ -428,10 +410,10 @@ const ServerLobby = class {
             this.listenersUnsafe.push(config.listener);
         }
         config.player.prepare(this);
-        this.playbackState = PLAYBACK_READY;
+        this.playbackState = PlaybackState.PLAYBACK_READY;
         this.memberIdPool = 0;
 
-        this.selfMember = new LobbyMember(config.username || "Host", ++this.memberIdPool, PERMISSION_HOST, "Server", null, this);
+        this.selfMember = new LobbyMember(config.username || "Host", ++this.memberIdPool, Permissions.PERMISSION_HOST, "Server", null, this);
         this.members.push(this.selfMember);
 
         console.log(`[PartyCast @ ${compactTime()}] Rebuilding library... This might take a while`);
@@ -447,11 +429,7 @@ const ServerLobby = class {
             console.log(`[PartyCast @ ${compactTime()}] Library contains ${songsCount} songs (average scan speed: ${buildSpeed.roundDecimal(1)} songs/s)`);
 
             thisLobby._broadcastEvent("Event.LIBRARY_UPDATED", res);
-            for (let i = 0; i < thisLobby.listenersUnsafe.length; i++) {
-                try {
-                    thisLobby.listenersUnsafe[i].onLibraryUpdated(thisLobby, res);
-                } catch (e) { }
-            }
+            thisLobby._emitListenersEvent("onLibraryUpdated", res);
         }).catch(function (err) {
             console.warn(`[PartyCast @ ${compactTime()}] Failed to reload library: ${err}`);
         });
@@ -462,11 +440,11 @@ const ServerLobby = class {
         this.httpServer = http.createServer(function(request, response) {
             response.setHeader("PartyCast-Lobby-Name", thisLobby.title);
 
-            let q = request.url;
+            const q = request.url;
             if (q.startsWith("/art/")) {
-                let id = decodeURIComponent(q.substring(5));
+                const id = decodeURIComponent(q.substring(5));
 
-                let libraryItems = thisLobby.libraryProvider.items;
+                const libraryItems = thisLobby.libraryProvider.items;
                 for (let i = 0; i < libraryItems.length; i++) {
                     let item = libraryItems[i];
                     if (item.artwork === id) {
@@ -500,12 +478,7 @@ const ServerLobby = class {
         });
         this.httpServer.listen(this.port, function() {
             console.log(`[PartyCast @ ${compactTime()}] HTTP server started on port ${thisLobby.port}`);
-
-            for (let i = 0; i < thisLobby.listenersUnsafe.length; i++) {
-                try {
-                    thisLobby.listenersUnsafe[i].onConnected(thisLobby);
-                } catch (e) { }
-            }
+            thisLobby._emitListenersEvent("onConnected");
         });
 
         // lobby websocket server
@@ -515,9 +488,9 @@ const ServerLobby = class {
         });
 
         this.wsServer.on('request', function(request) {
-            var connection = request.accept(null, request.origin);
+            const connection = request.accept(null, request.origin);
 
-            let clientAgent = request.httpRequest.headers["user-agent"];
+            const clientAgent = request.httpRequest.headers["user-agent"];
             let clientUsername = request.httpRequest.headers["partycast-username"];
             if (!clientUsername) clientUsername = request.remoteAddress;
             if (!clientUsername) {
@@ -528,11 +501,18 @@ const ServerLobby = class {
             clientUsername = clientUsername.split("\n").join(" ");
             clientUsername = clientUsername.substr(0, 25);
 
-            // todo: change permissions back to default
-            // PERMISSIONS_MOD is recommended for debugging,
-            // however you should change it back to PERMISSIONS_DEFAULT on production server
-            let clientMember = new LobbyMember(clientUsername, ++thisLobby.memberIdPool,
-                PERMISSIONS_MOD, clientAgent, connection, thisLobby);
+            let clientMember = thisLobby.memberCacheByIP[connection.remoteAddress];
+
+            if (clientMember && (clientMember.agent === clientAgent)) {
+                clientMember.name = clientUsername;
+                clientMember.connection = connection;
+                console.log(`[PartyCast @ ${compactTime()}] User \"${clientUsername}\"@${connection.remoteAddress} connected; found cached member by IP address`);
+            } else {
+                clientMember = new LobbyMember(clientUsername, ++thisLobby.memberIdPool,
+                    Permissions.PERMISSIONS_DEFAULT, clientAgent, connection, thisLobby);
+                thisLobby.memberCacheByIP[connection.remoteAddress] = clientMember;
+                console.log(`[PartyCast @ ${compactTime()}] User \"${clientUsername}\"@${connection.remoteAddress} connected; assigned new ID ${clientMember.id}`);
+            }
 
             if (thisLobby.actionBoardProvider) {
                 clientMember.board = thisLobby.actionBoardProvider(clientMember, () => {
@@ -540,7 +520,6 @@ const ServerLobby = class {
                 })
             }
 
-            console.log(`[PartyCast @ ${compactTime()}] User \"${clientUsername}\"@${connection.remoteAddress} connected; assigned ID ${clientMember.id}`);
 
             // acknowledge existing users before pushing new member to list
             thisLobby._broadcastEvent("Event.USER_JOINED", clientMember);
@@ -548,12 +527,7 @@ const ServerLobby = class {
 
             // push all data to new client
             thisLobby._sendEvent(clientMember, "LobbyCtl.DATA_PUSH", thisLobby);
-
-            for (let i = 0; i < thisLobby.listenersUnsafe.length; i++) {
-                try {
-                    thisLobby.listenersUnsafe[i].onUserJoined(thisLobby, clientMember);
-                } catch (e) { }
-            }
+            thisLobby._emitListenersEvent("onUserJoined", clientMember);
 
             connection.on('message', function(message) {
                 if (message.type === 'utf8') {
@@ -566,12 +540,7 @@ const ServerLobby = class {
                 if (clientMember) {
                     thisLobby.members = thisLobby.members.filter(function(el) { return el !== clientMember; });
                     thisLobby._broadcastEvent("Event.USER_LEFT", clientMember);
-
-                    for (let i = 0; i < thisLobby.listenersUnsafe.length; i++) {
-                        try {
-                            thisLobby.listenersUnsafe[i].onUserLeft(thisLobby, clientMember);
-                        } catch (e) { }
-                    }
+                    thisLobby._emitListenersEvent("onUserLeft", clientMember);
                 }
             });
         });
@@ -592,9 +561,9 @@ const ServerLobby = class {
 
     _handleMessage(clientMember, connection, message) {
         try {
-            let messageData = JSON.parse(message.utf8Data);
-            let eventType = messageData.type;
-            let mid = messageData.id || -1;
+            const messageData = JSON.parse(message.utf8Data);
+            const eventType = messageData.type;
+            const mid = messageData.id || -1;
 
             if (eventType === 'ActionBoard.SUBMIT') {
                 const data = messageData.value;
@@ -624,20 +593,19 @@ const ServerLobby = class {
                     }));
                 }
             } else if (eventType === 'LobbyCtl.UPDATE_USER') {
-                let data = messageData.value;
+                const data = messageData.value;
 
-                if (data.id === clientMember.id && clientMember.checkPermission(PERMISSION_CHANGE_NAME)) {
-                    this._handleUsernameChange(clientMember, connection, mid, data);
-                } else if (clientMember.checkPermission(PERMISSION_MANAGE_USERS)) {
+                if (clientMember.checkPermission(Permissions.PERMISSION_MANAGE_USERS)) {
                     for (let i = 0; i < this.members.length; i++) {
-                        let m = this.members[i];
+                        const m = this.members[i];
                         if (m.id === Number(data.id)) {
-                            this._handleUserUpdate(clientMember, connection, mid, data);
+                            this._handleUserUpdate(m, connection, mid, data);
                             break;
                         }
                     }
+                } else if (data.id === clientMember.id && clientMember.checkPermission(Permissions.PERMISSION_CHANGE_NAME)) {
+                    this._handleUsernameChange(clientMember, connection, mid, data);
                 } else {
-                    console.warn(`[PartyCast @ ${compactTime()}] User update requested by \"${clientMember.name}\" has been rejected`);
                     connection.sendUTF(JSON.stringify({
                         id: mid,
                         type: "LobbyCtl.RESPONSE",
@@ -645,9 +613,9 @@ const ServerLobby = class {
                         message: "Action rejected"
                     }));
                 }
-            } else if (eventType === 'LobbyCtl.ENQUEUE' && clientMember.checkPermission(PERMISSION_QUEUE)) {
-                let data = messageData.value;
-                let id = data.id;
+            } else if (eventType === 'LobbyCtl.ENQUEUE' && clientMember.checkPermission(Permissions.PERMISSION_QUEUE)) {
+                const data = messageData.value;
+                const id = data.id;
                 if (this._enqueueById(clientMember, id)) {
                     connection.sendUTF(JSON.stringify({
                         id: mid,
@@ -663,13 +631,13 @@ const ServerLobby = class {
                         message: "Item not found"
                     }));
                 }
-            } else if (eventType === 'LobbyCtl.PLAYBACK_PLAY' && clientMember.checkPermission(PERMISSION_MANAGE_QUEUE)) {
+            } else if (eventType === 'LobbyCtl.PLAYBACK_PLAY' && clientMember.checkPermission(Permissions.PERMISSION_MANAGE_QUEUE)) {
                 this.looper.play();
-            } else if (eventType === 'LobbyCtl.PLAYBACK_PAUSE' && clientMember.checkPermission(PERMISSION_MANAGE_QUEUE)) {
+            } else if (eventType === 'LobbyCtl.PLAYBACK_PAUSE' && clientMember.checkPermission(Permissions.PERMISSION_MANAGE_QUEUE)) {
                 this.looper.pause();
-            } else if (eventType === 'LobbyCtl.PLAYBACK_SKIP' && clientMember.checkPermission(PERMISSION_MANAGE_QUEUE)) {
+            } else if (eventType === 'LobbyCtl.PLAYBACK_SKIP' && clientMember.checkPermission(Permissions.PERMISSION_MANAGE_QUEUE)) {
                 this.looper.skip();
-            } else if (eventType === 'LobbyCtl.VOLUME_UPDATE' && clientMember.checkPermission(PERMISSION_MANAGE_QUEUE)) {
+            } else if (eventType === 'LobbyCtl.VOLUME_UPDATE' && clientMember.checkPermission(Permissions.PERMISSION_MANAGE_QUEUE)) {
                 const data = messageData.value;
                 const {level, muted} = data;
                 const volumeControl = this.config.player.getVolumeControl();
@@ -688,14 +656,19 @@ const ServerLobby = class {
                 const newTmpState = { level, muted };
                 this._broadcastEvent("Event.VOLUME_UPDATED", newTmpState);
             } else {
-                console.warn(`[PartyCast @ ${compactTime()}] Unhandled message from ${clientMember.name}`);
+                connection.sendUTF(JSON.stringify({
+                    id: mid,
+                    type: "LobbyCtl.RESPONSE",
+                    status: -1,
+                    message: "Not supported"
+                }));
             }
         } catch (e) {
             console.error(`[PartyCast @ ${compactTime()}] Error thrown while trying to handle message: ${e}`);
             connection.sendUTF(JSON.stringify({
-                "type": "Connection.ERROR",
-                "data": "Failed to handle message received because error was thrown",
-                "clientId": clientMember.id
+                type: "Connection.ERROR",
+                data: "Failed to handle message received because error was thrown",
+                clientId: clientMember.id
             }));
         }
     }
@@ -710,11 +683,7 @@ const ServerLobby = class {
             message: "Username updated"
         }));
         this._broadcastEvent("Event.USER_UPDATED", clientMember);
-        for (let i = 0; i < this.listenersUnsafe.length; i++) {
-            try {
-                this.listenersUnsafe[i].onUserUpdated(this, clientMember);
-            } catch (e) { }
-        }
+        this._emitListenersEvent("onUserUpdated", clientMember);
     }
 
     _handleUserUpdate(clientMember, connection, mid, data) {
@@ -728,9 +697,14 @@ const ServerLobby = class {
             message: "Username updated"
         }));
         this._broadcastEvent("Event.USER_UPDATED", clientMember);
-        for (let i = 0; i < this.listenersUnsafe.length; i++) {
+        this._emitListenersEvent("onUserUpdated", clientMember);
+    }
+
+    _emitListenersEvent(event, ...args) {
+        const listenersCopy = [...this.listenersUnsafe];
+        for (let i = 0; i < listenersCopy.length; i++) {
             try {
-                this.listenersUnsafe[i].onUserUpdated(this, clientMember);
+                listenersCopy[i][event](this, ...args);
             } catch (e) { }
         }
     }
@@ -748,7 +722,7 @@ const ServerLobby = class {
             try {
                 conn.sendUTF(JSON.stringify({
                     "type": type,
-                    "data": (typeof data === 'string') ? data : serialize(data, member, true),
+                    "data": (typeof data === 'string') ? data : Utils.parseForExport(data, {member, allowRaw: true}),
                     "clientId": member.id
                 }));
             } catch (e) {
@@ -774,7 +748,6 @@ const ServerLobby = class {
             return true;
         } else {
             return false;
-            console.warn(`[PartyCast @ ${compactTime()}] Enqueue item failed: ${id} not found [originated from \"${clientMember.name}\"]`);
         }
     }
 
@@ -782,22 +755,23 @@ const ServerLobby = class {
         return path.resolve(`${this.artworkCacheLocation}/${artworkUri}`);
     }
 
-    toJson(client) {
+    export(extra) {
         const volumeControl = this.config.player.getVolumeControl();
+        const member = extra.member;
         return {
             class: "Lobby",
             values: {
                 title: this.title,
                 hostId: this.selfMember.id,
-                members: serializeArray(this.members, client),
-                looper: serialize(this.looper, client),
-                library: serialize(this.libraryProvider, client),
+                members: Utils.parseForExport(this.members, extra),
+                looper: Utils.parseForExport(this.looper, extra),
+                library: Utils.parseForExport(this.libraryProvider, extra),
                 playerState: this.playbackState,
                 volumeState: {
                     level: volumeControl.level,
                     muted: volumeControl.muted
                 },
-                actionBoard: client.board ? client.board.generate() : []
+                actionBoard: member.board ? member.board.generate() : []
             }
         }
     }
