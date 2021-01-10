@@ -1,6 +1,6 @@
 # NodeCast
 
-<img src="screenshot.png">
+<img src="../nodecast-example/screenshot.png">
 NodeCast is NodeJS implementation of PartyCast server allowing it to be run on embedded devices.
 
 In order to run project "as is" without modifications, you will need:
