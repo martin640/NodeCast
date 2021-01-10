@@ -655,13 +655,6 @@ const ServerLobby = class {
 
                 const newTmpState = { level, muted };
                 this._broadcastEvent("Event.VOLUME_UPDATED", newTmpState);
-            } else {
-                connection.sendUTF(JSON.stringify({
-                    id: mid,
-                    type: "LobbyCtl.RESPONSE",
-                    status: -1,
-                    message: "Not supported"
-                }));
             }
         } catch (e) {
             console.error(`[PartyCast @ ${compactTime()}] Error thrown while trying to handle message: ${e}`);
