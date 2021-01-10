@@ -56,15 +56,6 @@ const Utils = {
     }
 }
 
-/* @deprecated */
-function serialize(obj, client, ignoreWarn) {
-}
-/* @deprecated */
-function serializeArray(arr, client) {
-
-}
-
-
 const LobbyMember = class {
     constructor(name, id, permissions, agent, connection, lobby) {
         this.name = name;
@@ -518,6 +509,9 @@ const ServerLobby = class {
                 thisLobby.memberCacheByIP[connection.remoteAddress] = clientMember;
                 console.log(`[PartyCast @ ${compactTime()}] User \"${clientUsername}\"@${connection.remoteAddress} connected; assigned new ID ${clientMember.id}`);
             }
+            // let hooks process new user
+            // hooks should not call clientMember.broadcastUpdate() !!!
+            thisLobby._emitListenersEvent("onUserJoining", clientMember);
 
             if (thisLobby.actionBoardProvider) {
                 clientMember.board = thisLobby.actionBoardProvider(clientMember, () => {
